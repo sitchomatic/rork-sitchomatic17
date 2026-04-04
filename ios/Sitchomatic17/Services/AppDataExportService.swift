@@ -583,9 +583,9 @@ class AppDataExportService {
 
         if !config.loginCredentials.isEmpty {
             var merged = LoginPersistenceService.shared.loadCredentials()
-            var existingIndexByKey = Dictionary(uniqueKeysWithValues: merged.enumerated().map { ($1.exportFormat, $0) })
+            var existingIndexByKey = Dictionary(uniqueKeysWithValues: merged.enumerated().map { (credentialKey(username: $1.username, password: $1.password), $0) })
             for ec in config.loginCredentials {
-                let key = "\(ec.username):\(ec.password)"
+                let key = credentialKey(username: ec.username, password: ec.password)
                 let cred = LoginCredential(username: ec.username, password: ec.password, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
                 if let status = CredentialStatus(rawValue: ec.status) { cred.status = status }
                 cred.notes = ec.notes
@@ -787,14 +787,14 @@ class AppDataExportService {
             changed = true
         }
 
-        let mergedNextPasswordIndex = min(max(existing.nextPasswordIndex, incoming.nextPasswordIndex), existing.assignedPasswords.count)
+        let mergedNextPasswordIndex = min(max(existing.nextPasswordIndex, incoming.nextPasswordIndex), mergedPasswords.count)
         if mergedNextPasswordIndex != existing.nextPasswordIndex {
             existing.nextPasswordIndex = mergedNextPasswordIndex
             changed = true
         }
 
         let mergedTestResults = mergeLoginTestResults(existing.testResults, incoming.testResults)
-        if mergedTestResults.count != existing.testResults.count {
+        if loginResultKeys(mergedTestResults) != loginResultKeys(existing.testResults) {
             existing.testResults = mergedTestResults
             changed = true
         }
@@ -811,7 +811,7 @@ class AppDataExportService {
         }
 
         let mergedTestResults = mergeCardTestResults(existing.testResults, incoming.testResults)
-        if mergedTestResults.count != existing.testResults.count {
+        if cardResultKeys(mergedTestResults) != cardResultKeys(existing.testResults) {
             existing.testResults = mergedTestResults
             changed = true
         }
@@ -899,10 +899,16 @@ class AppDataExportService {
     }
 
     private func mergeLoginTestResults(_ first: [LoginTestResult], _ second: [LoginTestResult]) -> [LoginTestResult] {
-        var seen = Set<String>()
+        var seen = Set<LoginResultKey>()
         var merged: [LoginTestResult] = []
         for result in first + second {
-            let key = "\(result.timestamp.timeIntervalSince1970)|\(result.success)|\(result.duration)|\(result.errorMessage ?? "")|\(result.responseDetail ?? "")"
+            let key = LoginResultKey(
+                timestamp: result.timestamp.timeIntervalSince1970,
+                success: result.success,
+                duration: result.duration,
+                errorMessage: result.errorMessage ?? "",
+                responseDetail: result.responseDetail ?? ""
+            )
             if seen.insert(key).inserted {
                 merged.append(result)
             }
@@ -910,16 +916,66 @@ class AppDataExportService {
         return merged.sorted { $0.timestamp > $1.timestamp }
     }
 
+    private func loginResultKeys(_ results: [LoginTestResult]) -> [LoginResultKey] {
+        results.map {
+            LoginResultKey(
+                timestamp: $0.timestamp.timeIntervalSince1970,
+                success: $0.success,
+                duration: $0.duration,
+                errorMessage: $0.errorMessage ?? "",
+                responseDetail: $0.responseDetail ?? ""
+            )
+        }
+    }
+
     private func mergeCardTestResults(_ first: [PPSRTestResult], _ second: [PPSRTestResult]) -> [PPSRTestResult] {
-        var seen = Set<String>()
+        var seen = Set<CardResultKey>()
         var merged: [PPSRTestResult] = []
         for result in first + second {
-            let key = "\(result.timestamp.timeIntervalSince1970)|\(result.success)|\(result.vin)|\(result.duration)|\(result.errorMessage ?? "")"
+            let key = CardResultKey(
+                timestamp: result.timestamp.timeIntervalSince1970,
+                success: result.success,
+                vin: result.vin,
+                duration: result.duration,
+                errorMessage: result.errorMessage ?? ""
+            )
             if seen.insert(key).inserted {
                 merged.append(result)
             }
         }
         return merged.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    private func cardResultKeys(_ results: [PPSRTestResult]) -> [CardResultKey] {
+        results.map {
+            CardResultKey(
+                timestamp: $0.timestamp.timeIntervalSince1970,
+                success: $0.success,
+                vin: $0.vin,
+                duration: $0.duration,
+                errorMessage: $0.errorMessage ?? ""
+            )
+        }
+    }
+
+    private func credentialKey(username: String, password: String) -> String {
+        "\(username):\(password)"
+    }
+
+    nonisolated private struct LoginResultKey: Hashable {
+        let timestamp: TimeInterval
+        let success: Bool
+        let duration: TimeInterval
+        let errorMessage: String
+        let responseDetail: String
+    }
+
+    nonisolated private struct CardResultKey: Hashable {
+        let timestamp: TimeInterval
+        let success: Bool
+        let vin: String
+        let duration: TimeInterval
+        let errorMessage: String
     }
 
     func exportComprehensiveState() -> String {
