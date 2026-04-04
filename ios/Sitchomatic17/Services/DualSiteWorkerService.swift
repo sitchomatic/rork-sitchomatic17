@@ -136,6 +136,18 @@ class DualSiteWorkerService {
             onLog("V4.2: Attempt \(attemptNum)/\(config.maxAttemptsPerSite)", .info)
 
             if attemptNum > 1 {
+                if automationSettings.clearCookiesBetweenAttempts || automationSettings.clearLocalStorageBetweenAttempts || automationSettings.clearSessionStorageBetweenAttempts {
+                    let clearJS = Self.buildClearStorageJS(
+                        clearCookies: automationSettings.clearCookiesBetweenAttempts,
+                        clearLocalStorage: automationSettings.clearLocalStorageBetweenAttempts,
+                        clearSessionStorage: automationSettings.clearSessionStorageBetweenAttempts
+                    )
+                    async let joeClear: String? = joeSession.executeJS(clearJS)
+                    async let ignClear: String? = ignSession.executeJS(clearJS)
+                    _ = await (joeClear, ignClear)
+                    onLog("V4.2: Cleared data between attempts (cookies:\(automationSettings.clearCookiesBetweenAttempts) localStorage:\(automationSettings.clearLocalStorageBetweenAttempts) sessionStorage:\(automationSettings.clearSessionStorageBetweenAttempts))", .info)
+                }
+
                 let thinkDelay = gaussianDelay(
                     minVal: automationSettings.v42InterAttemptDelayMinSec,
                     maxVal: automationSettings.v42InterAttemptDelayMaxSec
@@ -323,6 +335,8 @@ class DualSiteWorkerService {
                 site: "joe",
                 attemptNum: attemptNum,
                 maxAttempts: config.maxAttemptsPerSite,
+                settlementResult: joeSettleResult,
+                automationSettings: automationSettings,
                 sessionId: sessionId
             )
             async let ignOutcomeTask = self.evaluateSiteStrict(
@@ -330,6 +344,8 @@ class DualSiteWorkerService {
                 site: "ignition",
                 attemptNum: attemptNum,
                 maxAttempts: config.maxAttemptsPerSite,
+                settlementResult: ignSettleResult,
+                automationSettings: automationSettings,
                 sessionId: sessionId
             )
             let joeOutcome = await joeOutcomeTask
@@ -452,15 +468,115 @@ class DualSiteWorkerService {
         site: String,
         attemptNum: Int,
         maxAttempts: Int,
+        settlementResult: SettlementGateEngine.SettlementResult?,
+        automationSettings: AutomationSettings,
         sessionId: String
     ) async -> LoginOutcome {
-        let result = await strictDetection.evaluateStrict(
-            session: session,
-            module: .unifiedSession,
-            sessionId: sessionId
-        )
-        logger.log("V4.2 EVAL [\(site)]: \(result.outcome) — \(result.phase): \(result.reason)", category: .evaluation, level: result.outcome == .success ? .success : result.outcome == .unsure ? .warning : .info, sessionId: sessionId)
-        return result.outcome
+        let executeJS: (String) async -> String? = { js in await session.executeJS(js) }
+
+        // Issue 14: about:blank / content length check
+        let currentURL = await executeJS("(function(){try{return window.location.href||'';}catch(e){return'';}})()")  ?? ""
+        if currentURL == "about:blank" || currentURL.isEmpty {
+            logger.log("V4.2 EVAL [\(site)]: about:blank or empty URL — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+            return .unsure
+        }
+        let pageContent = await session.getPageContent() ?? ""
+        if pageContent.count < 80 {
+            logger.log("V4.2 EVAL [\(site)]: page content < 80 chars (\(pageContent.count)) — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+            return .unsure
+        }
+
+        // Issue 9: Use settlement result if available — avoid duplicate work
+        if let settle = settlementResult, settle.errorTextVisible {
+            logger.log("V4.2 EVAL [\(site)]: settlement already detected error text — proceeding with DOM/OCR check", category: .evaluation, level: .info, sessionId: sessionId)
+        }
+
+        // Issue 3: Cookie-based success detection — check for session_id cookie
+        let cookieResult = await executeJS("(function(){return document.cookie||'';})()")
+        if let cookies = cookieResult, cookies.lowercased().contains("session_id") {
+            logger.log("V4.2 EVAL [\(site)]: SUCCESS — session_id cookie detected", category: .evaluation, level: .success, sessionId: sessionId)
+            return .success
+        }
+
+        // Issue 1: 1-second indefinite OCR polling loop for success/error markers
+        let ocrKeywords = ["has been disabled", "temporarily disabled", "recommended for you", "last played"]
+        let maxOCRPolls = 15  // 15 polls × 1s = 15 seconds max to avoid infinite loop
+        for pollIndex in 1...maxOCRPolls {
+            guard !Task.isCancelled else { break }
+
+            // P3 DOM check for "incorrect" (runs every cycle)
+            let domContent = (await session.getPageContent() ?? "").lowercased()
+            if domContent.contains("incorrect") {
+                logger.log("V4.2 EVAL [\(site)]: 'incorrect' found in DOM (poll \(pollIndex))", category: .evaluation, level: .info, sessionId: sessionId)
+                return .noAcc
+            }
+
+            // Issue 11: SMS keyword detection via DOM
+            let smsKeywords = automationSettings.smsNotificationKeywords
+            if automationSettings.smsDetectionEnabled {
+                for keyword in smsKeywords {
+                    if domContent.contains(keyword.lowercased()) {
+                        logger.log("V4.2 EVAL [\(site)]: SMS keyword '\(keyword)' detected in DOM (poll \(pollIndex))", category: .evaluation, level: .warning, sessionId: sessionId)
+                        return .smsDetected
+                    }
+                }
+            }
+
+            // OCR scan for success/error keywords
+            if let screenshot = await session.captureScreenshot() {
+                let ocrResult = await visionOCR.analyzeScreenshot(screenshot)
+                let ocrLower = ocrResult.allText.lowercased()
+
+                if ocrLower.contains("has been disabled") {
+                    logger.log("V4.2 EVAL [\(site)]: PERM_DISABLED via OCR — 'has been disabled' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
+                    return .permDisabled
+                }
+                if ocrLower.contains("temporarily disabled") {
+                    logger.log("V4.2 EVAL [\(site)]: TEMP_DISABLED via OCR — 'temporarily disabled' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
+                    return .tempDisabled
+                }
+                if ocrLower.contains("recommended for you") || ocrLower.contains("last played") {
+                    logger.log("V4.2 EVAL [\(site)]: SUCCESS via OCR — lobby markers (poll \(pollIndex))", category: .evaluation, level: .success, sessionId: sessionId)
+                    return .success
+                }
+                if ocrLower.contains("incorrect") {
+                    logger.log("V4.2 EVAL [\(site)]: 'incorrect' via OCR (poll \(pollIndex))", category: .evaluation, level: .info, sessionId: sessionId)
+                    return .noAcc
+                }
+
+                // Check for SMS keywords in OCR as well
+                if automationSettings.smsDetectionEnabled {
+                    for keyword in smsKeywords {
+                        if ocrLower.contains(keyword.lowercased()) {
+                            logger.log("V4.2 EVAL [\(site)]: SMS keyword '\(keyword)' detected via OCR (poll \(pollIndex))", category: .evaluation, level: .warning, sessionId: sessionId)
+                            return .smsDetected
+                        }
+                    }
+                }
+            }
+
+            // Also check DOM for success/error keywords
+            for keyword in ocrKeywords {
+                if domContent.contains(keyword) {
+                    if keyword == "has been disabled" {
+                        logger.log("V4.2 EVAL [\(site)]: PERM_DISABLED via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
+                        return .permDisabled
+                    } else if keyword == "temporarily disabled" {
+                        logger.log("V4.2 EVAL [\(site)]: TEMP_DISABLED via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
+                        return .tempDisabled
+                    } else {
+                        logger.log("V4.2 EVAL [\(site)]: SUCCESS via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .success, sessionId: sessionId)
+                        return .success
+                    }
+                }
+            }
+
+            // Wait 1 second before next OCR poll
+            try? await Task.sleep(for: .seconds(1))
+        }
+
+        logger.log("V4.2 EVAL [\(site)]: OCR polling exhausted (\(maxOCRPolls) polls) — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+        return .unsure
     }
 
     private func resolveURL(for site: SiteTarget) -> URL {
@@ -644,5 +760,19 @@ class DualSiteWorkerService {
         case "Error": return .errorBanner
         default: return .unknown
         }
+    }
+
+    private static func buildClearStorageJS(clearCookies: Bool, clearLocalStorage: Bool, clearSessionStorage: Bool) -> String {
+        var parts: [String] = []
+        if clearCookies {
+            parts.append("document.cookie.split(';').forEach(function(c){document.cookie=c.trim().split('=')[0]+'=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';});")
+        }
+        if clearLocalStorage {
+            parts.append("try{localStorage.clear();}catch(e){}")
+        }
+        if clearSessionStorage {
+            parts.append("try{sessionStorage.clear();}catch(e){}")
+        }
+        return "(function(){\(parts.joined())return'CLEARED';})()"
     }
 }
