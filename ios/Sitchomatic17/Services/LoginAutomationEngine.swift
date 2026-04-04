@@ -10,8 +10,6 @@ nonisolated enum LoginOutcome: Sendable {
     case unsure
     case connectionFailure
     case timeout
-    case redBannerError
-    case smsDetected
 }
 
 @MainActor

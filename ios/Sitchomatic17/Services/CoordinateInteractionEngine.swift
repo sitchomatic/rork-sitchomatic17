@@ -193,7 +193,27 @@ class CoordinateInteractionEngine {
     func checkNetworkIdle(executeJS: @escaping (String) async -> String?, timeoutMs: Int = 5000) async -> Bool {
         let js = """
         (function(){
-            return document.readyState === 'complete' ? 'IDLE' : document.readyState;
+            if(document.readyState !== 'complete') return 'LOADING';
+            if(typeof window.performance === 'undefined') return 'NO_PERF';
+            if(typeof window.performance.getEntriesByType === 'undefined') return 'NO_API';
+
+            var now = Date.now();
+            var resources = window.performance.getEntriesByType('resource');
+            var recentRequests = resources.filter(function(r) {
+                return (now - r.responseEnd) < 500;
+            });
+
+            if(recentRequests.length > 0) return 'PENDING';
+
+            if(typeof window.fetch !== 'undefined' && typeof window.fetch.toString === 'function') {
+                var activeFetches = 0;
+                try {
+                    if(window.__activeFetchCount) activeFetches = window.__activeFetchCount;
+                } catch(e) {}
+                if(activeFetches > 0) return 'FETCH_PENDING';
+            }
+
+            return 'IDLE';
         })()
         """
         let start = Date()
