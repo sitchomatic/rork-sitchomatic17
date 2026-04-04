@@ -26,6 +26,7 @@ class HardwareTypingEngine {
         executeJS: @escaping (String) async -> String?,
         minKeystrokeMs: Int = 50,
         maxKeystrokeMs: Int = 150,
+        clearFieldMethod: AutomationSettings.FieldClearMethod = .tripleClickDelete,
         sessionId: String = ""
     ) async -> Bool {
         let focused = await coordEngine.coordinateFocusField(
@@ -41,7 +42,7 @@ class HardwareTypingEngine {
 
         try? await Task.sleep(for: .milliseconds(Int.random(in: 80...220)))
 
-        let cleared = await clearActiveField(executeJS: executeJS)
+        let cleared = await clearActiveField(executeJS: executeJS, method: clearFieldMethod, sessionId: sessionId)
         if !cleared {
             logger.log("HWTyping: clear field failed — proceeding anyway", category: .automation, level: .warning, sessionId: sessionId)
         }
@@ -131,19 +132,85 @@ class HardwareTypingEngine {
         return result == "BS"
     }
 
-    private func clearActiveField(executeJS: @escaping (String) async -> String?) async -> Bool {
-        let js = """
-        (function(){
-            var el=document.activeElement;
-            if(!el||!(el.tagName==='INPUT'||el.tagName==='TEXTAREA'))return'NO_ACTIVE';
-            var ns=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
-            if(ns&&ns.set){ns.set.call(el,'');}else{el.value='';}
-            el.dispatchEvent(new Event('input',{bubbles:true}));
-            return'CLEARED';
-        })()
-        """
-        let result = await executeJS(js)
-        return result == "CLEARED"
+    private func clearActiveField(
+        executeJS: @escaping (String) async -> String?,
+        method: AutomationSettings.FieldClearMethod = .tripleClickDelete,
+        sessionId: String = ""
+    ) async -> Bool {
+        switch method {
+        case .tripleClickDelete:
+            let selectDeleteJS = """
+            (function(){
+                var el=document.activeElement;
+                if(!el||!(el.tagName==='INPUT'||el.tagName==='TEXTAREA'))return'NO_ACTIVE';
+                el.select();
+                document.execCommand('delete');
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+                return(el.value||'').length.toString();
+            })()
+            """
+            let result = await executeJS(selectDeleteJS)
+            if result == "0" {
+                logger.log("HWTyping: tripleClickDelete cleared field", category: .automation, level: .debug, sessionId: sessionId)
+                return true
+            }
+            logger.log("HWTyping: tripleClickDelete incomplete (remaining: \(result ?? "nil")), falling back to JS clear", category: .automation, level: .warning, sessionId: sessionId)
+            // Fallback to JS clear if select+delete didn't work
+            let fallbackJS = """
+            (function(){
+                var el=document.activeElement;
+                if(!el||!(el.tagName==='INPUT'||el.tagName==='TEXTAREA'))return'NO_ACTIVE';
+                var ns=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
+                if(ns&&ns.set){ns.set.call(el,'');}else{el.value='';}
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+                return'CLEARED';
+            })()
+            """
+            let fallbackResult = await executeJS(fallbackJS)
+            return fallbackResult == "CLEARED"
+
+        case .selectAllDelete:
+            let js = """
+            (function(){
+                var el=document.activeElement;
+                if(!el||!(el.tagName==='INPUT'||el.tagName==='TEXTAREA'))return'NO_ACTIVE';
+                el.select();
+                document.execCommand('delete');
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+                return(el.value||'').length.toString();
+            })()
+            """
+            let result = await executeJS(js)
+            if result == "0" {
+                logger.log("HWTyping: selectAllDelete cleared field", category: .automation, level: .debug, sessionId: sessionId)
+                return true
+            }
+            logger.log("HWTyping: selectAllDelete incomplete (remaining: \(result ?? "nil"))", category: .automation, level: .warning, sessionId: sessionId)
+            return false
+
+        case .jsValueClear:
+            let js = """
+            (function(){
+                var el=document.activeElement;
+                if(!el||!(el.tagName==='INPUT'||el.tagName==='TEXTAREA'))return'NO_ACTIVE';
+                var ns=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
+                if(ns&&ns.set){ns.set.call(el,'');}else{el.value='';}
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+                return'CLEARED';
+            })()
+            """
+            let result = await executeJS(js)
+            return result == "CLEARED"
+
+        case .backspaceLoop:
+            let lengthJS = "(function(){var el=document.activeElement;if(!el)return'0';return(el.value||'').length.toString();})()"
+            let length = Int(await executeJS(lengthJS) ?? "0") ?? 0
+            for _ in 0..<length {
+                _ = await typeBackspace(executeJS: executeJS)
+                try? await Task.sleep(for: .milliseconds(gaussianDelay(minMs: 30, maxMs: 80)))
+            }
+            return true
+        }
     }
 
     private func verifyFieldLength(executeJS: @escaping (String) async -> String?, expectedLength: Int) async -> Bool {

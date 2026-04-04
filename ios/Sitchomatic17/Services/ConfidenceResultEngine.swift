@@ -189,7 +189,6 @@ class ConfidenceResultEngine {
         case .unsure: return "unsure"
         case .connectionFailure: return "connectionFailure"
         case .timeout: return "timeout"
-        case .redBannerError: return "redBannerError"
         case .smsDetected: return "smsDetected"
         }
     }

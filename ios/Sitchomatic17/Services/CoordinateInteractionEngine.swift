@@ -191,14 +191,56 @@ class CoordinateInteractionEngine {
     }
 
     func checkNetworkIdle(executeJS: @escaping (String) async -> String?, timeoutMs: Int = 5000) async -> Bool {
-        let js = """
+        // Install network activity tracker on first call
+        let installTrackerJS = """
         (function(){
-            return document.readyState === 'complete' ? 'IDLE' : document.readyState;
+            if(window.__netIdleTracker)return'EXISTS';
+            window.__netIdleTracker={pending:0};
+            var origSend=window.XMLHttpRequest.prototype.send;
+            window.XMLHttpRequest.prototype.send=function(){
+                var t=this;
+                if(!t.__netIdleTracked){
+                    t.__netIdleTracked=true;
+                    window.__netIdleTracker.pending++;
+                    var done=function(){
+                        if(t.__netIdleTracked){
+                            t.__netIdleTracked=false;
+                            window.__netIdleTracker.pending=Math.max(0,window.__netIdleTracker.pending-1);
+                        }
+                    };
+                    t.addEventListener('loadend',done);
+                    t.addEventListener('abort',done);
+                    t.addEventListener('error',done);
+                    t.addEventListener('timeout',done);
+                }
+                return origSend.apply(this,arguments);
+            };
+            var origFetch=window.fetch;
+            window.fetch=function(){
+                window.__netIdleTracker.pending++;
+                return origFetch.apply(this,arguments).then(function(r){
+                    window.__netIdleTracker.pending=Math.max(0,window.__netIdleTracker.pending-1);
+                    return r;
+                }).catch(function(e){
+                    window.__netIdleTracker.pending=Math.max(0,window.__netIdleTracker.pending-1);
+                    throw e;
+                });
+            };
+            return'INSTALLED';
+        })()
+        """
+        _ = await executeJS(installTrackerJS)
+
+        let checkJS = """
+        (function(){
+            var ready=document.readyState==='complete';
+            var pending=(window.__netIdleTracker?window.__netIdleTracker.pending:0);
+            return ready&&pending===0?'IDLE':document.readyState+':'+pending;
         })()
         """
         let start = Date()
         while Date().timeIntervalSince(start) * 1000 < Double(timeoutMs) {
-            let result = await executeJS(js)
+            let result = await executeJS(checkJS)
             if result == "IDLE" { return true }
             try? await Task.sleep(for: .milliseconds(200))
         }
