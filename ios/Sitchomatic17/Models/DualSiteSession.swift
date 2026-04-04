@@ -98,7 +98,7 @@ nonisolated enum SiteResult: String, Codable, Sendable, CaseIterable {
                 return .noAccount
             }
             return .unsure
-        case .unsure, .redBannerError, .smsDetected:
+        case .unsure, .smsDetected:
             return .unsure
         case .connectionFailure, .timeout:
             return .unsure

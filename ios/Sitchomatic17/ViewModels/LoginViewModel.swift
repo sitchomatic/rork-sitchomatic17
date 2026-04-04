@@ -645,22 +645,6 @@ class LoginViewModel {
             }
             consecutiveUnusualFailures = 0
 
-        case .redBannerError:
-            credential.status = .untested
-            let redEntry = await RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
-            let redDetCount = await RequeuePriorityService.shared.detectionCount(for: credential.id)
-            let _ = proxyService.nextWorkingProxy(for: isIgnitionMode ? .ignition : .joe)
-            if let detURL = attempt.detectedURL, !detURL.isEmpty {
-                urlRotation.reportFailure(urlString: detURL)
-            }
-            if let entry = redEntry {
-                requeueCredentialWithPriority(credential, entry: entry)
-            } else {
-                requeueCredentialToBottom(credential)
-            }
-            let cooldown = Int(RequeuePriorityService.shared.cooldownForOutcome(outcome))
-            log("\(credential.username) — red banner error (\(redDetCount)x) — proxy+URL rotated, \(cooldown)s cooldown", level: .warning)
-
         case .smsDetected:
             credential.status = .untested
             let smsEntry = await RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
@@ -854,14 +838,13 @@ class LoginViewModel {
         case .unsure: outcomeLabel = "unsure"
         case .timeout: outcomeLabel = "timeout"
         case .connectionFailure: outcomeLabel = "connectionFailure"
-        case .redBannerError: outcomeLabel = "redBannerError"
         case .smsDetected: outcomeLabel = "smsDetected"
         }
 
         switch outcome {
         case .success, .noAcc, .permDisabled, .tempDisabled:
             recoveryService.markCompleted(credentialId: credential.id)
-        case .unsure, .timeout, .connectionFailure, .redBannerError, .smsDetected:
+        case .unsure, .timeout, .connectionFailure, .smsDetected:
             let screenshotHash = attempt.screenshotIds.last
             recoveryService.updateSnapshot(
                 credentialId: credential.id,
