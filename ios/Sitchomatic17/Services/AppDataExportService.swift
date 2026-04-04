@@ -583,7 +583,7 @@ class AppDataExportService {
 
         if !config.loginCredentials.isEmpty {
             var merged = LoginPersistenceService.shared.loadCredentials()
-            var credentialIndexByKey = Dictionary(uniqueKeysWithValues: merged.enumerated().map { (credentialKey(username: $1.username, password: $1.password), $0) })
+            var indexByCredentialKey = Dictionary(uniqueKeysWithValues: merged.enumerated().map { (credentialKey(username: $1.username, password: $1.password), $0) })
             for ec in config.loginCredentials {
                 let key = credentialKey(username: ec.username, password: ec.password)
                 let cred = LoginCredential(username: ec.username, password: ec.password, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
@@ -594,13 +594,13 @@ class AppDataExportService {
                 cred.testResults = ec.testResults.map { r in
                     LoginTestResult(success: r.success, duration: r.duration, errorMessage: r.errorMessage, responseDetail: r.responseDetail, timestamp: Date(timeIntervalSince1970: r.timestamp))
                 }
-                if let existingIndex = credentialIndexByKey[key] {
+                if let existingIndex = indexByCredentialKey[key] {
                     if mergeCredential(existing: merged[existingIndex], incoming: cred) {
                         result.conflictsResolved += 1
                     }
                 } else {
                     merged.append(cred)
-                    credentialIndexByKey[key] = merged.count - 1
+                    indexByCredentialKey[key] = merged.count - 1
                     result.credentialsImported += 1
                 }
             }
@@ -611,7 +611,7 @@ class AppDataExportService {
 
         if !config.ppsrCards.isEmpty {
             var merged = PPSRPersistenceService.shared.loadCards()
-            var cardIndexByNumber = Dictionary(uniqueKeysWithValues: merged.enumerated().map { ($1.number, $0) })
+            var indexByCardNumber = Dictionary(uniqueKeysWithValues: merged.enumerated().map { ($1.number, $0) })
             for ec in config.ppsrCards {
                 let card = PPSRCard(number: ec.number, expiryMonth: ec.expiryMonth, expiryYear: ec.expiryYear, cvv: ec.cvv, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
                 if let status = CardStatus(rawValue: ec.status) { card.status = status }
@@ -621,13 +621,13 @@ class AppDataExportService {
                 if let bin = ec.binData {
                     card.binData = PPSRBINData(bin: bin.bin, scheme: bin.scheme, type: bin.type, category: bin.category, issuer: bin.issuer, country: bin.country, countryCode: bin.countryCode, isLoaded: bin.isLoaded)
                 }
-                if let existingIndex = cardIndexByNumber[ec.number] {
+                if let existingIndex = indexByCardNumber[ec.number] {
                     if mergeCard(existing: merged[existingIndex], incoming: card) {
                         result.conflictsResolved += 1
                     }
                 } else {
                     merged.append(card)
-                    cardIndexByNumber[ec.number] = merged.count - 1
+                    indexByCardNumber[ec.number] = merged.count - 1
                     result.cardsImported += 1
                 }
             }
@@ -688,11 +688,11 @@ class AppDataExportService {
         if !config.recordedFlows.isEmpty {
             let flowService = FlowPersistenceService.shared
             var existingFlows = flowService.loadFlows()
-            var flowIndexById = Dictionary(uniqueKeysWithValues: existingFlows.enumerated().map { ($1.id, $0) })
+            var indexByFlowId = Dictionary(uniqueKeysWithValues: existingFlows.enumerated().map { ($1.id, $0) })
             var added = 0
             var conflictsResolved = 0
             for flow in config.recordedFlows {
-                if let existingIndex = flowIndexById[flow.id] {
+                if let existingIndex = indexByFlowId[flow.id] {
                     let (resolvedFlow, didChange) = resolveFlowConflict(existing: existingFlows[existingIndex], incoming: flow)
                     if didChange {
                         existingFlows[existingIndex] = resolvedFlow
@@ -700,7 +700,7 @@ class AppDataExportService {
                     }
                 } else {
                     existingFlows.append(flow)
-                    flowIndexById[flow.id] = existingFlows.count - 1
+                    indexByFlowId[flow.id] = existingFlows.count - 1
                     added += 1
                 }
             }
@@ -846,6 +846,10 @@ class AppDataExportService {
             changed = true
         } else if incoming.actions.count > merged.actions.count {
             merged.actions = incoming.actions
+            merged.actionCount = max(incoming.actionCount, incoming.actions.count)
+            if incoming.totalDurationMs > merged.totalDurationMs {
+                merged.totalDurationMs = incoming.totalDurationMs
+            }
             changed = true
         }
 
