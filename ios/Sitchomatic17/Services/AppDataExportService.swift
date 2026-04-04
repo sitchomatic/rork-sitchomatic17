@@ -583,7 +583,8 @@ class AppDataExportService {
 
         if !config.loginCredentials.isEmpty {
             var merged = LoginPersistenceService.shared.loadCredentials()
-            var indexByCredentialKey = Dictionary(uniqueKeysWithValues: merged.enumerated().map { (credentialKey(username: $1.username, password: $1.password), $0) })
+            let credentialPairs = merged.enumerated().map { (credentialKey(username: $1.username, password: $1.password), $0) }
+            var indexByCredentialKey = Dictionary(uniqueKeysWithValues: credentialPairs)
             for ec in config.loginCredentials {
                 let key = credentialKey(username: ec.username, password: ec.password)
                 let cred = LoginCredential(username: ec.username, password: ec.password, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
@@ -611,7 +612,8 @@ class AppDataExportService {
 
         if !config.ppsrCards.isEmpty {
             var merged = PPSRPersistenceService.shared.loadCards()
-            var indexByCardNumber = Dictionary(uniqueKeysWithValues: merged.enumerated().map { ($1.number, $0) })
+            let cardPairs = merged.enumerated().map { ($1.number, $0) }
+            var indexByCardNumber = Dictionary(uniqueKeysWithValues: cardPairs)
             for ec in config.ppsrCards {
                 let card = PPSRCard(number: ec.number, expiryMonth: ec.expiryMonth, expiryYear: ec.expiryYear, cvv: ec.cvv, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
                 if let status = CardStatus(rawValue: ec.status) { card.status = status }
@@ -688,7 +690,8 @@ class AppDataExportService {
         if !config.recordedFlows.isEmpty {
             let flowService = FlowPersistenceService.shared
             var existingFlows = flowService.loadFlows()
-            var indexByFlowId = Dictionary(uniqueKeysWithValues: existingFlows.enumerated().map { ($1.id, $0) })
+            let flowPairs = existingFlows.enumerated().map { ($1.id, $0) }
+            var indexByFlowId = Dictionary(uniqueKeysWithValues: flowPairs)
             var added = 0
             var conflictsResolved = 0
             for flow in config.recordedFlows {
@@ -846,7 +849,7 @@ class AppDataExportService {
             changed = true
         } else if incoming.actions.count > merged.actions.count {
             merged.actions = incoming.actions
-            merged.actionCount = max(incoming.actionCount, incoming.actions.count)
+            merged.actionCount = max(merged.actionCount, max(incoming.actionCount, incoming.actions.count))
             if incoming.totalDurationMs > merged.totalDurationMs {
                 merged.totalDurationMs = incoming.totalDurationMs
             }
@@ -923,8 +926,8 @@ class AppDataExportService {
         incomingNextIndex: Int,
         mergedPasswords: [String]
     ) -> Int {
-        let existingClamped = min(max(existingNextIndex, 0), existingPasswords.count)
-        let incomingClamped = min(max(incomingNextIndex, 0), incomingPasswords.count)
+        let existingClamped = clampedIndex(existingNextIndex, count: existingPasswords.count)
+        let incomingClamped = clampedIndex(incomingNextIndex, count: incomingPasswords.count)
 
         let consumedFromExisting = Set(existingPasswords.prefix(existingClamped))
         let consumedFromIncoming = Set(incomingPasswords.prefix(incomingClamped))
@@ -938,10 +941,14 @@ class AppDataExportService {
         return resolved
     }
 
+    private func clampedIndex(_ index: Int, count: Int) -> Int {
+        min(max(index, 0), count)
+    }
+
     private func appendBoundedNote(existing: String, incoming: String) -> String {
         let combined = "\(existing)\n\(incoming)"
         guard combined.count > maxMergedNotesLength else { return combined }
-        return String(combined.suffix(maxMergedNotesLength))
+        return "…" + String(combined.suffix(maxMergedNotesLength - 1))
     }
 
     private func mergeLoginTestResults(_ first: [LoginTestResult], _ second: [LoginTestResult]) -> [LoginTestResult] {
