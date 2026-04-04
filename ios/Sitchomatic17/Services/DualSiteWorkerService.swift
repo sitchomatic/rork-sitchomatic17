@@ -202,6 +202,7 @@ class DualSiteWorkerService {
                     text: email,
                     executeJS: joeExecuteJS,
                     minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
+                    clearFieldMethod: automationSettings.clearFieldMethod,
                     sessionId: sessionId
                 )
                 try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
@@ -210,6 +211,7 @@ class DualSiteWorkerService {
                     text: password,
                     executeJS: joeExecuteJS,
                     minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
+                    clearFieldMethod: automationSettings.clearFieldMethod,
                     sessionId: sessionId
                 )
                 return emailOk && passOk
@@ -222,6 +224,7 @@ class DualSiteWorkerService {
                     text: email,
                     executeJS: ignExecuteJS,
                     minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
+                    clearFieldMethod: automationSettings.clearFieldMethod,
                     sessionId: sessionId
                 )
                 try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
@@ -230,6 +233,7 @@ class DualSiteWorkerService {
                     text: password,
                     executeJS: ignExecuteJS,
                     minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
+                    clearFieldMethod: automationSettings.clearFieldMethod,
                     sessionId: sessionId
                 )
                 return emailOk && passOk
@@ -507,6 +511,7 @@ class DualSiteWorkerService {
 
         // Issue 1: 1-second indefinite OCR polling loop for success/error markers
         let ocrKeywords = Self.ocrSuccessErrorKeywords
+        let smsKeywordsLower = automationSettings.smsNotificationKeywords.map { $0.lowercased() }
         for pollIndex in 1...Self.maxOCRPollCount {
             guard !Task.isCancelled else { break }
 
@@ -517,11 +522,26 @@ class DualSiteWorkerService {
                 return .noAcc
             }
 
+            // Check DOM for success/error keywords
+            for keyword in ocrKeywords {
+                if domContent.contains(keyword) {
+                    if keyword == "has been disabled" {
+                        logger.log("V4.2 EVAL [\(site)]: PERM_DISABLED via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
+                        return .permDisabled
+                    } else if keyword == "temporarily disabled" {
+                        logger.log("V4.2 EVAL [\(site)]: TEMP_DISABLED via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
+                        return .tempDisabled
+                    } else {
+                        logger.log("V4.2 EVAL [\(site)]: SUCCESS via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .success, sessionId: sessionId)
+                        return .success
+                    }
+                }
+            }
+
             // Issue 11: SMS keyword detection via DOM
-            let smsKeywords = automationSettings.smsNotificationKeywords
             if automationSettings.smsDetectionEnabled {
-                for keyword in smsKeywords {
-                    if domContent.contains(keyword.lowercased()) {
+                for keyword in smsKeywordsLower {
+                    if domContent.contains(keyword) {
                         logger.log("V4.2 EVAL [\(site)]: SMS keyword '\(keyword)' detected in DOM (poll \(pollIndex))", category: .evaluation, level: .warning, sessionId: sessionId)
                         return .smsDetected
                     }
@@ -552,27 +572,11 @@ class DualSiteWorkerService {
 
                 // Check for SMS keywords in OCR as well
                 if automationSettings.smsDetectionEnabled {
-                    for keyword in smsKeywords {
-                        if ocrLower.contains(keyword.lowercased()) {
+                    for keyword in smsKeywordsLower {
+                        if ocrLower.contains(keyword) {
                             logger.log("V4.2 EVAL [\(site)]: SMS keyword '\(keyword)' detected via OCR (poll \(pollIndex))", category: .evaluation, level: .warning, sessionId: sessionId)
                             return .smsDetected
                         }
-                    }
-                }
-            }
-
-            // Also check DOM for success/error keywords
-            for keyword in ocrKeywords {
-                if domContent.contains(keyword) {
-                    if keyword == "has been disabled" {
-                        logger.log("V4.2 EVAL [\(site)]: PERM_DISABLED via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
-                        return .permDisabled
-                    } else if keyword == "temporarily disabled" {
-                        logger.log("V4.2 EVAL [\(site)]: TEMP_DISABLED via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .critical, sessionId: sessionId)
-                        return .tempDisabled
-                    } else {
-                        logger.log("V4.2 EVAL [\(site)]: SUCCESS via DOM — '\(keyword)' (poll \(pollIndex))", category: .evaluation, level: .success, sessionId: sessionId)
-                        return .success
                     }
                 }
             }
