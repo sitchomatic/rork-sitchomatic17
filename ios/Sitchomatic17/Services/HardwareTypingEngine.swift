@@ -139,22 +139,22 @@ class HardwareTypingEngine {
     ) async -> Bool {
         switch method {
         case .tripleClickDelete:
-            let selectAllJS = """
+            let selectDeleteJS = """
             (function(){
                 var el=document.activeElement;
                 if(!el||!(el.tagName==='INPUT'||el.tagName==='TEXTAREA'))return'NO_ACTIVE';
                 el.select();
-                return'SELECTED';
+                document.execCommand('delete');
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+                return(el.value||'').length.toString();
             })()
             """
-            let selectResult = await executeJS(selectAllJS)
-            if selectResult == "SELECTED" {
-                _ = await typeBackspace(executeJS: executeJS)
-                try? await Task.sleep(for: .milliseconds(50))
+            let result = await executeJS(selectDeleteJS)
+            if result == "0" {
+                logger.log("HWTyping: tripleClickDelete cleared field", category: .automation, level: .debug, sessionId: sessionId)
+                return true
             }
-            let verifyJS = "(function(){var el=document.activeElement;if(!el)return'0';return(el.value||'').length.toString();})()"
-            let remaining = Int(await executeJS(verifyJS) ?? "0") ?? 0
-            if remaining == 0 { return true }
+            logger.log("HWTyping: tripleClickDelete incomplete (remaining: \(result ?? "nil")), falling back to JS clear", category: .automation, level: .warning, sessionId: sessionId)
             // Fallback to JS clear if select+delete didn't work
             let fallbackJS = """
             (function(){
@@ -166,8 +166,8 @@ class HardwareTypingEngine {
                 return'CLEARED';
             })()
             """
-            let result = await executeJS(fallbackJS)
-            return result == "CLEARED"
+            let fallbackResult = await executeJS(fallbackJS)
+            return fallbackResult == "CLEARED"
 
         case .selectAllDelete:
             let js = """
@@ -177,11 +177,16 @@ class HardwareTypingEngine {
                 el.select();
                 document.execCommand('delete');
                 el.dispatchEvent(new Event('input',{bubbles:true}));
-                return'CLEARED';
+                return(el.value||'').length.toString();
             })()
             """
             let result = await executeJS(js)
-            return result == "CLEARED"
+            if result == "0" {
+                logger.log("HWTyping: selectAllDelete cleared field", category: .automation, level: .debug, sessionId: sessionId)
+                return true
+            }
+            logger.log("HWTyping: selectAllDelete incomplete (remaining: \(result ?? "nil"))", category: .automation, level: .warning, sessionId: sessionId)
+            return false
 
         case .jsValueClear:
             let js = """

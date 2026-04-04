@@ -196,12 +196,24 @@ class CoordinateInteractionEngine {
         (function(){
             if(window.__netIdleTracker)return'EXISTS';
             window.__netIdleTracker={pending:0};
-            var orig=window.XMLHttpRequest.prototype.open;
-            window.XMLHttpRequest.prototype.open=function(){
-                window.__netIdleTracker.pending++;
+            var origSend=window.XMLHttpRequest.prototype.send;
+            window.XMLHttpRequest.prototype.send=function(){
                 var t=this;
-                t.addEventListener('loadend',function(){window.__netIdleTracker.pending=Math.max(0,window.__netIdleTracker.pending-1);});
-                return orig.apply(this,arguments);
+                if(!t.__netIdleTracked){
+                    t.__netIdleTracked=true;
+                    window.__netIdleTracker.pending++;
+                    var done=function(){
+                        if(t.__netIdleTracked){
+                            t.__netIdleTracked=false;
+                            window.__netIdleTracker.pending=Math.max(0,window.__netIdleTracker.pending-1);
+                        }
+                    };
+                    t.addEventListener('loadend',done);
+                    t.addEventListener('abort',done);
+                    t.addEventListener('error',done);
+                    t.addEventListener('timeout',done);
+                }
+                return origSend.apply(this,arguments);
             };
             var origFetch=window.fetch;
             window.fetch=function(){

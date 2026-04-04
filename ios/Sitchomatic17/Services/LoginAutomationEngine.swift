@@ -1114,12 +1114,12 @@ class LoginAutomationEngine {
 
             if pollResult.errorBannerDetected {
                 attempt.logs.append(PPSRLogEntry(
-                    message: "RED BANNER ERROR detected — wiping session, requeuing to bottom",
+                    message: "Error banner detected — wiping session, requeuing to bottom",
                     level: .warning
                 ))
-                await captureTerminalScreenshot(session: session, attempt: attempt, step: "red_banner_error", note: "RED BANNER ERROR — requeued for future retry", autoResult: .unknown, terminalType: .errorBanner)
+                await captureTerminalScreenshot(session: session, attempt: attempt, step: "error_banner", note: "Error banner detected — requeued for future retry", autoResult: .unknown, terminalType: .errorBanner)
                 attempt.status = .failed
-                attempt.errorMessage = "Red banner detected — uncertain outcome, requeuing"
+                attempt.errorMessage = "Error banner detected — uncertain outcome, requeuing"
                 attempt.completedAt = Date()
                 return (.unsure, lastEvaluation, maxSubmitCycles)
             }

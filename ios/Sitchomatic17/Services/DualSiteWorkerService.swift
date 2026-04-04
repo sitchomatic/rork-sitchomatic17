@@ -17,7 +17,6 @@ class DualSiteWorkerService {
     private let coordEngine = CoordinateInteractionEngine.shared
     private let typingEngine = HardwareTypingEngine.shared
     private let settlementGate = SettlementGateEngine.shared
-    private let strictDetection = StrictLoginDetectionEngine.shared
 
     private func gaussianDelay(minVal: Double, maxVal: Double) -> Double {
         let mean = (minVal + maxVal) / 2.0
@@ -477,8 +476,8 @@ class DualSiteWorkerService {
     private func evaluateSiteStrict(
         session: LoginSiteWebSession,
         site: String,
-        attemptNum: Int,
-        maxAttempts: Int,
+        attemptNum _attemptNum: Int,
+        maxAttempts _maxAttempts: Int,
         settlementResult: SettlementGateEngine.SettlementResult?,
         automationSettings: AutomationSettings,
         sessionId: String
@@ -504,12 +503,13 @@ class DualSiteWorkerService {
 
         // Issue 3: Cookie-based success detection — check for session_id cookie
         let cookieResult = await executeJS("(function(){return document.cookie||'';})()")
-        if let cookies = cookieResult, cookies.lowercased().contains("session_id") {
+        if let cookies = cookieResult,
+           cookies.lowercased().range(of: #"(?:^|;\s*)session_id="#, options: .regularExpression) != nil {
             logger.log("V4.2 EVAL [\(site)]: SUCCESS — session_id cookie detected", category: .evaluation, level: .success, sessionId: sessionId)
             return .success
         }
 
-        // Issue 1: 1-second indefinite OCR polling loop for success/error markers
+        // Issue 1: 1-second bounded OCR polling loop (max 15 polls) for success/error markers
         let ocrKeywords = Self.ocrSuccessErrorKeywords
         let smsKeywordsLower = automationSettings.smsNotificationKeywords.map { $0.lowercased() }
         for pollIndex in 1...Self.maxOCRPollCount {
@@ -772,6 +772,8 @@ class DualSiteWorkerService {
         }
     }
 
+    // Note: document.cookie cannot remove HttpOnly cookies or cookies set with different path/domain.
+    // For full isolation, consider using WKWebsiteDataStore.removeData() or recreating WKWebView.
     private static func buildClearStorageJS(clearCookies: Bool, clearLocalStorage: Bool, clearSessionStorage: Bool) -> String {
         var parts: [String] = []
         if clearCookies {
