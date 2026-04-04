@@ -42,7 +42,7 @@ class HardwareTypingEngine {
 
         try? await Task.sleep(for: .milliseconds(Int.random(in: 80...220)))
 
-        let cleared = await clearActiveField(executeJS: executeJS, method: clearFieldMethod, fieldSelectors: fieldSelectors, sessionId: sessionId)
+        let cleared = await clearActiveField(executeJS: executeJS, method: clearFieldMethod, sessionId: sessionId)
         if !cleared {
             logger.log("HWTyping: clear field failed — proceeding anyway", category: .automation, level: .warning, sessionId: sessionId)
         }
@@ -135,7 +135,6 @@ class HardwareTypingEngine {
     private func clearActiveField(
         executeJS: @escaping (String) async -> String?,
         method: AutomationSettings.FieldClearMethod = .tripleClickDelete,
-        fieldSelectors: [String] = [],
         sessionId: String = ""
     ) async -> Bool {
         switch method {

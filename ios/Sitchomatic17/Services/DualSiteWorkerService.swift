@@ -463,6 +463,13 @@ class DualSiteWorkerService {
         return WorkerResult(session: session, joeOutcome: lastJoeOutcome, ignitionOutcome: lastIgnOutcome, pairedOCRStatus: session.pairedOCRStatus)
     }
 
+    /// Minimum page content length (chars) below which the page is considered blank.
+    private static let minPageContentLength = 80
+    /// Maximum number of 1-second OCR polls before returning .unsure.
+    private static let maxOCRPollCount = 15
+    /// OCR keywords that indicate success or terminal account states.
+    private static let ocrSuccessErrorKeywords = ["has been disabled", "temporarily disabled", "recommended for you", "last played"]
+
     private func evaluateSiteStrict(
         session: LoginSiteWebSession,
         site: String,
@@ -481,8 +488,8 @@ class DualSiteWorkerService {
             return .unsure
         }
         let pageContent = await session.getPageContent() ?? ""
-        if pageContent.count < 80 {
-            logger.log("V4.2 EVAL [\(site)]: page content < 80 chars (\(pageContent.count)) — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+        if pageContent.count < Self.minPageContentLength {
+            logger.log("V4.2 EVAL [\(site)]: page content < \(Self.minPageContentLength) chars (\(pageContent.count)) — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
             return .unsure
         }
 
@@ -499,9 +506,8 @@ class DualSiteWorkerService {
         }
 
         // Issue 1: 1-second indefinite OCR polling loop for success/error markers
-        let ocrKeywords = ["has been disabled", "temporarily disabled", "recommended for you", "last played"]
-        let maxOCRPolls = 15  // 15 polls × 1s = 15 seconds max to avoid infinite loop
-        for pollIndex in 1...maxOCRPolls {
+        let ocrKeywords = Self.ocrSuccessErrorKeywords
+        for pollIndex in 1...Self.maxOCRPollCount {
             guard !Task.isCancelled else { break }
 
             // P3 DOM check for "incorrect" (runs every cycle)
@@ -575,7 +581,7 @@ class DualSiteWorkerService {
             try? await Task.sleep(for: .seconds(1))
         }
 
-        logger.log("V4.2 EVAL [\(site)]: OCR polling exhausted (\(maxOCRPolls) polls) — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+        logger.log("V4.2 EVAL [\(site)]: OCR polling exhausted (\(Self.maxOCRPollCount) polls) — unsure", category: .evaluation, level: .warning, sessionId: sessionId)
         return .unsure
     }
 
