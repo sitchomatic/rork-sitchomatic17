@@ -218,11 +218,11 @@ class StrictLoginDetectionEngine {
         module: DetectionModule,
         sessionId: String
     ) async -> DetectionResult {
-        let currentURL = session.targetURL.absoluteString
+        let currentURL = (await session.executeJS("(function(){try{return window.location.href||'';}catch(e){return'';}})()")  ?? "").lowercased()
         let pageContent = (await session.getPageContent() ?? "").lowercased()
 
         // Check for about:blank or empty content
-        if currentURL.lowercased() == "about:blank" || pageContent.count < 80 {
+        if currentURL == "about:blank" || currentURL.isEmpty || pageContent.count < 80 {
             logger.log("StrictDetection: blank page or minimal content detected — returning unsure", category: .evaluation, level: .warning, sessionId: sessionId)
             return DetectionResult(
                 outcome: .unsure,

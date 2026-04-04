@@ -98,7 +98,7 @@ nonisolated enum SiteResult: String, Codable, Sendable, CaseIterable {
                 return .noAccount
             }
             return .unsure
-        case .unsure:
+        case .unsure, .smsDetected:
             return .unsure
         case .connectionFailure, .timeout:
             return .unsure
@@ -303,7 +303,7 @@ nonisolated struct HumanEmulationConfig: Codable, Sendable {
     let postErrorDelayMax: Int
 
     static let `default` = HumanEmulationConfig(
-        typingSpeedMin: 60,
+        typingSpeedMin: 50,
         typingSpeedMax: 150,
         clickJitterPx: 3,
         postErrorDelayMin: 400,

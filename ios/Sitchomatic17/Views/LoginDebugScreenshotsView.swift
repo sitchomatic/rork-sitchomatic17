@@ -896,7 +896,6 @@ struct LoginAlbumDetailSheet: View {
         case .tempDisabled: .orange
         case .unsure: .yellow
         case .connectionFailure, .timeout: .gray
-        case .redBannerError: .red
         case .smsDetected: .orange
         }
     }

@@ -75,7 +75,6 @@ class ReviewItem: Identifiable {
         case .unsure: "Unsure"
         case .connectionFailure: "Connection Failure"
         case .timeout: "Timeout"
-        case .redBannerError: "Red Banner"
         case .smsDetected: "SMS Detected"
         }
     }
