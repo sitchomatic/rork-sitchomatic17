@@ -115,7 +115,6 @@ nonisolated struct SiteSelectors: Codable, Sendable {
     let user: String
     let pass: String
     let submit: String
-    let error: String
 }
 
 nonisolated struct SiteTarget: Codable, Sendable, Identifiable {
@@ -128,14 +127,14 @@ nonisolated struct SiteTarget: Codable, Sendable, Identifiable {
         id: "joe",
         name: "JoePoint",
         url: "https://joefortunepokies.win/login",
-        selectors: SiteSelectors(user: "#username", pass: "#password", submit: "#loginSubmit", error: ".error-message")
+        selectors: SiteSelectors(user: "#username", pass: "#password", submit: "#loginSubmit")
     )
 
     static let ignition = SiteTarget(
         id: "ignition",
         name: "Ignition Lite",
         url: "https://ignitioncasino.ooo/?overlay=login",
-        selectors: SiteSelectors(user: "#email", pass: "#login-password", submit: "#login-submit", error: ".alert-danger")
+        selectors: SiteSelectors(user: "#email", pass: "#login-password", submit: "#login-submit")
     )
 }
 
@@ -304,7 +303,7 @@ nonisolated struct HumanEmulationConfig: Codable, Sendable {
     let postErrorDelayMax: Int
 
     static let `default` = HumanEmulationConfig(
-        typingSpeedMin: 60,
+        typingSpeedMin: 50,
         typingSpeedMax: 150,
         clickJitterPx: 3,
         postErrorDelayMin: 400,

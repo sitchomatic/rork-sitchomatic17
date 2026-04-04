@@ -19,6 +19,16 @@ class DualSiteWorkerService {
     private let settlementGate = SettlementGateEngine.shared
     private let strictDetection = StrictLoginDetectionEngine.shared
 
+    private func gaussianDelay(minVal: Double, maxVal: Double) -> Double {
+        let mean = (minVal + maxVal) / 2.0
+        let stdDev = (maxVal - minVal) / 4.0
+        let u1 = Double.random(in: 0.0001...0.9999)
+        let u2 = Double.random(in: 0.0001...0.9999)
+        let z = sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2)
+        let delay = mean + z * stdDev
+        return max(minVal, min(maxVal, delay))
+    }
+
     struct WorkerResult {
         let session: DualSiteSession
         let joeOutcome: LoginOutcome?
@@ -110,7 +120,9 @@ class DualSiteWorkerService {
         _ = await (joeCookieDismiss, ignCookieDismiss)
         onLog("V4.2: Cookie notices auto-dismissed on both sites", .info)
 
-        try? await Task.sleep(for: .milliseconds(Int.random(in: 400...700)))
+        let initDelay = Double.random(in: 0.0...6.0)
+        onLog("V4.2: Initialization delay \(String(format: "%.1f", initDelay))s", .info)
+        try? await Task.sleep(for: .seconds(initDelay))
 
         var lastJoeOutcome: LoginOutcome?
         var lastIgnOutcome: LoginOutcome?
@@ -124,7 +136,10 @@ class DualSiteWorkerService {
             onLog("V4.2: Attempt \(attemptNum)/\(config.maxAttemptsPerSite)", .info)
 
             if attemptNum > 1 {
-                let thinkDelay = Double.random(in: 2.5...4.0)
+                let thinkDelay = gaussianDelay(
+                    minVal: automationSettings.v42InterAttemptDelayMinSec,
+                    maxVal: automationSettings.v42InterAttemptDelayMaxSec
+                )
                 onLog("V4.2: Inter-attempt delay \(String(format: "%.1f", thinkDelay))s", .info)
                 try? await Task.sleep(for: .seconds(thinkDelay))
                 guard await earlyStop.isActive else { break }
@@ -144,7 +159,7 @@ class DualSiteWorkerService {
             async let ignNetIdle: Bool = self.coordEngine.checkNetworkIdle(executeJS: { js in await ignSession.executeJS(js) }, timeoutMs: 3000)
             _ = await (joeNetIdle, ignNetIdle)
 
-            try? await Task.sleep(for: .milliseconds(Int.random(in: 400...700)))
+            try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
 
             async let joePreClickTask = self.settlementGate.capturePreClickFingerprint(
                 executeJS: { js in await joeSession.executeJS(js) },
@@ -174,15 +189,15 @@ class DualSiteWorkerService {
                     fieldSelectors: joeEmailSelectors,
                     text: email,
                     executeJS: joeExecuteJS,
-                    minKeystrokeMs: 50, maxKeystrokeMs: 150,
+                    minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
                     sessionId: sessionId
                 )
-                try? await Task.sleep(for: .milliseconds(Int.random(in: 400...700)))
+                try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
                 let passOk = await self.typingEngine.focusAndType(
                     fieldSelectors: joePassSelectors,
                     text: password,
                     executeJS: joeExecuteJS,
-                    minKeystrokeMs: 50, maxKeystrokeMs: 150,
+                    minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
                     sessionId: sessionId
                 )
                 return emailOk && passOk
@@ -194,15 +209,15 @@ class DualSiteWorkerService {
                     fieldSelectors: ignEmailSelectors,
                     text: email,
                     executeJS: ignExecuteJS,
-                    minKeystrokeMs: 50, maxKeystrokeMs: 150,
+                    minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
                     sessionId: sessionId
                 )
-                try? await Task.sleep(for: .milliseconds(Int.random(in: 400...700)))
+                try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
                 let passOk = await self.typingEngine.focusAndType(
                     fieldSelectors: ignPassSelectors,
                     text: password,
                     executeJS: ignExecuteJS,
-                    minKeystrokeMs: 50, maxKeystrokeMs: 150,
+                    minKeystrokeMs: config.humanEmulation.typingSpeedMin, maxKeystrokeMs: config.humanEmulation.typingSpeedMax,
                     sessionId: sessionId
                 )
                 return emailOk && passOk
@@ -213,7 +228,7 @@ class DualSiteWorkerService {
 
             onLog("V4.2: Typing complete — Joe:\(joeTyped) Ign:\(ignTyped)", joeTyped && ignTyped ? .success : .warning)
 
-            try? await Task.sleep(for: .milliseconds(Int.random(in: 400...700)))
+            try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
 
             guard await earlyStop.isActive else { break }
 
@@ -301,7 +316,7 @@ class DualSiteWorkerService {
                 onLog("V4.2: Post-click screenshot captured (priority \(clickPriority), delay \(postClickDelay)ms)", .info)
             }
 
-            try? await Task.sleep(for: .milliseconds(Int.random(in: 400...700)))
+            try? await Task.sleep(for: .milliseconds(Int.random(in: automationSettings.v42HumanVarianceMinMs...automationSettings.v42HumanVarianceMaxMs)))
 
             async let joeOutcomeTask = self.evaluateSiteStrict(
                 session: joeSession,
