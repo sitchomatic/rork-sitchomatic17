@@ -1119,7 +1119,7 @@ class LoginAutomationEngine {
                 ))
                 await captureTerminalScreenshot(session: session, attempt: attempt, step: "red_banner_error", note: "RED BANNER ERROR — requeued for future retry", autoResult: .unknown, terminalType: .errorBanner)
                 attempt.status = .failed
-                attempt.errorMessage = "Red banner error detected — requeuing to bottom"
+                attempt.errorMessage = "Red banner detected — uncertain outcome, requeuing"
                 attempt.completedAt = Date()
                 return (.unsure, lastEvaluation, maxSubmitCycles)
             }
