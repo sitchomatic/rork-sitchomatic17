@@ -775,7 +775,7 @@ class AppDataExportService {
             if existingNotes.isEmpty {
                 existing.notes = incomingNotes
                 changed = true
-            } else if existingNotes != incomingNotes && !existingNotes.contains(incomingNotes) {
+            } else if existingNotes != incomingNotes && !containsExactNoteLine(existing: existingNotes, incoming: incomingNotes) {
                 existing.notes = "\(existing.notes)\n\(incomingNotes)"
                 changed = true
             }
@@ -787,7 +787,13 @@ class AppDataExportService {
             changed = true
         }
 
-        let mergedNextPasswordIndex = min(max(existing.nextPasswordIndex, incoming.nextPasswordIndex), mergedPasswords.count)
+        let mergedNextPasswordIndex = resolveMergedPasswordIndex(
+            existingPasswords: existing.assignedPasswords,
+            existingNextIndex: existing.nextPasswordIndex,
+            incomingPasswords: incoming.assignedPasswords,
+            incomingNextIndex: incoming.nextPasswordIndex,
+            mergedPasswords: mergedPasswords
+        )
         if mergedNextPasswordIndex != existing.nextPasswordIndex {
             existing.nextPasswordIndex = mergedNextPasswordIndex
             changed = true
@@ -831,18 +837,15 @@ class AppDataExportService {
         var merged = existing
         var changed = false
 
-        if incoming.actions.count > merged.actions.count {
+        let incomingScore = flowCompletenessScore(incoming)
+        let existingScore = flowCompletenessScore(merged)
+        if incomingScore > existingScore {
             merged.actions = incoming.actions
-            changed = true
-        }
-
-        if incoming.actionCount > merged.actionCount {
             merged.actionCount = incoming.actionCount
-            changed = true
-        }
-
-        if incoming.totalDurationMs > merged.totalDurationMs {
             merged.totalDurationMs = incoming.totalDurationMs
+            changed = true
+        } else if incoming.actions.count > merged.actions.count {
+            merged.actions = incoming.actions
             changed = true
         }
 
@@ -858,6 +861,11 @@ class AppDataExportService {
         }
 
         return (merged, changed)
+    }
+
+    private func flowCompletenessScore(_ flow: RecordedFlow) -> Int {
+        let effectiveActionCount = max(flow.actionCount, flow.actions.count)
+        return (effectiveActionCount * 1000) + Int(flow.totalDurationMs.rounded())
     }
 
     private func shouldPromoteCredentialStatus(current: CredentialStatus, incoming: CredentialStatus) -> Bool {
@@ -896,6 +904,34 @@ class AppDataExportService {
             merged.append(value)
         }
         return merged
+    }
+
+    private func containsExactNoteLine(existing: String, incoming: String) -> Bool {
+        Set(existing.components(separatedBy: .newlines).map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }).contains(incoming)
+    }
+
+    private func resolveMergedPasswordIndex(
+        existingPasswords: [String],
+        existingNextIndex: Int,
+        incomingPasswords: [String],
+        incomingNextIndex: Int,
+        mergedPasswords: [String]
+    ) -> Int {
+        let existingClamped = min(max(existingNextIndex, 0), existingPasswords.count)
+        let incomingClamped = min(max(incomingNextIndex, 0), incomingPasswords.count)
+
+        let consumedFromExisting = Set(existingPasswords.prefix(existingClamped))
+        let consumedFromIncoming = Set(incomingPasswords.prefix(incomingClamped))
+        let consumedUnion = consumedFromExisting.union(consumedFromIncoming)
+
+        var resolved = 0
+        for password in mergedPasswords {
+            guard consumedUnion.contains(password) else { break }
+            resolved += 1
+        }
+        return resolved
     }
 
     private func mergeLoginTestResults(_ first: [LoginTestResult], _ second: [LoginTestResult]) -> [LoginTestResult] {
