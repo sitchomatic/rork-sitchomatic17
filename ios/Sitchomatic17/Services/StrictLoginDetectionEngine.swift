@@ -218,7 +218,24 @@ class StrictLoginDetectionEngine {
         module: DetectionModule,
         sessionId: String
     ) async -> DetectionResult {
+        let currentURL = (await session.executeJS("(function(){try{return window.location.href||'';}catch(e){return'';}})()")  ?? "").lowercased()
         let pageContent = (await session.getPageContent() ?? "").lowercased()
+
+        // Check for about:blank or empty content
+        if currentURL == "about:blank" || currentURL.isEmpty || pageContent.count < 80 {
+            logger.log("StrictDetection: blank page or minimal content detected — returning unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+            return DetectionResult(
+                outcome: .unsure,
+                phase: "P0_blank",
+                reason: "Page is about:blank or content length < 80 chars",
+                incorrectDetectedViaDOM: false,
+                incorrectDetectedViaOCR: false,
+                buttonCycleCompleted: false,
+                retryPerformed: false,
+                detectedIncorrect: false
+            )
+        }
+
         let screenshot = await session.captureScreenshot()
 
         let p1Override = await evaluateImmediateOverrides(
