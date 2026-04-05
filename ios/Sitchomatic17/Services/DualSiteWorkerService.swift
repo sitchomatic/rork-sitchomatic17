@@ -17,6 +17,7 @@ class DualSiteWorkerService {
     private let coordEngine = CoordinateInteractionEngine.shared
     private let typingEngine = HardwareTypingEngine.shared
     private let settlementGate = SettlementGateEngine.shared
+    private let submitRouter = SubmitMethodRouter.shared
 
     private func gaussianDelay(minVal: Double, maxVal: Double) -> Double {
         let mean = (minVal + maxVal) / 2.0
@@ -249,12 +250,11 @@ class DualSiteWorkerService {
 
             async let joeClicked: Bool = {
                 guard joeLoaded && joeTyped else { return false }
-                let result = await self.coordEngine.coordinateClickWithFallback(
-                    primarySelectors: joeLoginBtnSelectors,
+                let result = await self.submitRouter.executeSubmit(
+                    method: automationSettings.joeSubmitMethod,
+                    selectors: joeLoginBtnSelectors,
                     fallbackSelectors: ["button", "[role='button']"],
                     executeJS: joeExecuteJS,
-                    jitterPx: 3,
-                    hoverDwellMs: 300,
                     sessionId: sessionId
                 )
                 return result.success
@@ -262,12 +262,11 @@ class DualSiteWorkerService {
 
             async let ignClicked: Bool = {
                 guard ignLoaded && ignTyped else { return false }
-                let result = await self.coordEngine.coordinateClickWithFallback(
-                    primarySelectors: ignLoginBtnSelectors,
+                let result = await self.submitRouter.executeSubmit(
+                    method: automationSettings.ignitionSubmitMethod,
+                    selectors: ignLoginBtnSelectors,
                     fallbackSelectors: ["button", "[role='button']"],
                     executeJS: ignExecuteJS,
-                    jitterPx: 3,
-                    hoverDwellMs: 300,
                     sessionId: sessionId
                 )
                 return result.success
