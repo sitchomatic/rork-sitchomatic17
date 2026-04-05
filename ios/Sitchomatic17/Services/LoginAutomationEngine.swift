@@ -1112,16 +1112,16 @@ class LoginAutomationEngine {
                 level: pollResult.redirectedToHomepage ? .success : .info
             ))
 
+            // CRIMSON SWEEP: Legacy DOM text-based errorBannerDetected SILENCED.
+            // Red banner detection is now handled exclusively by ThickRedDetectEngine (pixel sniper)
+            // via CrimsonSweepOrchestrator. DOM keyword polling may still set this flag, but we
+            // no longer act on it — the pixel sniper is the single source of truth for red banners.
             if pollResult.errorBannerDetected {
                 attempt.logs.append(PPSRLogEntry(
-                    message: "Error banner detected — wiping session, requeuing to bottom",
-                    level: .warning
+                    message: "[CrimsonSweep] DOM error text detected — IGNORED (pixel sniper is authoritative)",
+                    level: .info
                 ))
-                await captureTerminalScreenshot(session: session, attempt: attempt, step: "error_banner", note: "Error banner detected — requeued for future retry", autoResult: .unknown, terminalType: .errorBanner)
-                attempt.status = .failed
-                attempt.errorMessage = "Error banner detected — uncertain outcome, requeuing"
-                attempt.completedAt = Date()
-                return (.unsure, lastEvaluation, maxSubmitCycles)
+                logger.log("CrimsonSweep: DOM errorBannerDetected=true SILENCED — ThickRedDetect is authoritative", category: .evaluation, level: .debug, sessionId: sessionId)
             }
 
             if pollResult.smsNotificationDetected {
