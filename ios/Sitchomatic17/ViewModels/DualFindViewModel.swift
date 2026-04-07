@@ -98,6 +98,7 @@ class DualFindViewModel {
     private let identityActor = IdentityActor.shared
     private let coordEngine = CoordinateInteractionEngine.shared
     private let settlementGate = SettlementGateEngine.shared
+    private let submitRouter = SubmitMethodRouter.shared
 
     var isPaused: Bool {
         isJoePaused && isIgnPaused
@@ -577,30 +578,23 @@ class DualFindViewModel {
                 sessionId: label
             )
 
-            let tripleClickKey = "\(siteLabel)_\(sessionIndex)"
-            let consecutiveFails = tripleClickConsecutiveFailures[tripleClickKey] ?? 0
+            let siteTarget: SiteTarget = site == .joefortune ? .joefortune : .ignition
+            let btnSelectors = [siteTarget.selectors.submit, "button[type='submit']", "input[type='submit']"]
+            let fallbackBtnSelectors = ["button", "[role='button']"]
+            let activeSubmitMethod = site == .joefortune ? automationSettings.joeSubmitMethod : automationSettings.ignitionSubmitMethod
 
-            var submitOk = false
-            if consecutiveFails < 2 {
-                let siteTarget: SiteTarget = site == .joefortune ? .joefortune : .ignition
-                let btnSelectors = [siteTarget.selectors.submit, "button[type='submit']", "input[type='submit']"]
-                let fallbackBtnSelectors = ["button", "[role='button']"]
-
-                let tripleResult = await coordEngine.tripleClickWithEscalatingDwell(
-                    selectors: btnSelectors,
-                    fallbackSelectors: fallbackBtnSelectors,
-                    executeJS: sessionExecuteJS,
-                    jitterPx: 3,
-                    sessionId: label
-                )
-                submitOk = tripleResult.success
-                if submitOk {
-                    tripleClickConsecutiveFailures[tripleClickKey] = 0
-                    log("V5.2 [\(label)] Triple-click submit: \(tripleResult.clicksCompleted)/3 clicks")
-                } else {
-                    tripleClickConsecutiveFailures[tripleClickKey] = consecutiveFails + 1
-                    log("V5.2 [\(label)] Triple-click FAILED (\(consecutiveFails + 1) consecutive) — falling back", level: .warning)
-                }
+            let routeResult = await submitRouter.executeSubmit(
+                method: activeSubmitMethod,
+                selectors: btnSelectors,
+                fallbackSelectors: fallbackBtnSelectors,
+                executeJS: sessionExecuteJS,
+                sessionId: label
+            )
+            var submitOk = routeResult.success
+            if submitOk {
+                log("V5.2 [\(label)] Submit via \(activeSubmitMethod.rawValue): \(routeResult.clicksCompleted) clicks")
+            } else {
+                log("V5.2 [\(label)] Submit via \(activeSubmitMethod.rawValue) FAILED — falling back", level: .warning)
             }
 
             if !submitOk {
@@ -609,6 +603,7 @@ class DualFindViewModel {
                 if !calibResult.success {
                     _ = await session.pressEnterOnPasswordField()
                 }
+                submitOk = true
                 log("V5.2 [\(label)] Calibrated fallback submit used")
             }
 
@@ -1002,14 +997,15 @@ class DualFindViewModel {
             sessionId: label
         )
 
-        let tripleResult = await coordEngine.tripleClickWithEscalatingDwell(
+        let retrySubmitMethod = site == .joefortune ? automationSettings.joeSubmitMethod : automationSettings.ignitionSubmitMethod
+        let retryRouteResult = await submitRouter.executeSubmit(
+            method: retrySubmitMethod,
             selectors: btnSelectors,
             fallbackSelectors: ["button", "[role='button']"],
             executeJS: sessionExecuteJS,
-            jitterPx: 3,
             sessionId: label
         )
-        if !tripleResult.success {
+        if !retryRouteResult.success {
             let calForBtn = getCalibration(site: site, index: sessionIndex)
             let calibResult = await session.clickLoginButtonCalibrated(calibration: calForBtn)
             if !calibResult.success {

@@ -474,97 +474,19 @@ class TrueDetectionService {
             }
         }
 
-        for bannerSelector in config.errorBannerSelectors {
-            let escaped = bannerSelector.replacingOccurrences(of: "'", with: "\\'")
-            let js = """
-            (function() {
-                var el = document.querySelector('\(escaped)');
-                if (!el) return 'NOT_FOUND';
-                var text = (el.textContent || '').trim().toLowerCase();
-                var visible = el.offsetParent !== null || el.offsetHeight > 0;
-                if (!visible) return 'NOT_VISIBLE';
-                var style = window.getComputedStyle(el);
-                var bg = style.backgroundColor || '';
-                var isRed = false;
-                var m = bg.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
-                if (m) {
-                    var r = parseInt(m[1]), g = parseInt(m[2]), b = parseInt(m[3]);
-                    isRed = r > 140 && g < 80 && b < 80;
-                }
-                if (!isRed) {
-                    var parent = el.parentElement;
-                    for (var i = 0; i < 3 && parent; i++) {
-                        var ps = window.getComputedStyle(parent).backgroundColor || '';
-                        var pm = ps.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
-                        if (pm) {
-                            var pr = parseInt(pm[1]), pg = parseInt(pm[2]), pb = parseInt(pm[3]);
-                            if (pr > 140 && pg < 80 && pb < 80) { isRed = true; break; }
-                        }
-                        parent = parent.parentElement;
-                    }
-                }
-                if (!isRed) return 'NOT_RED';
-                var hasErrorText = /^error!?$/i.test(text) || /error/i.test(text);
-                if (!hasErrorText && text.length > 100) return 'NOT_ERROR_TEXT';
-                return 'BANNER:' + text.substring(0, 200);
-            })();
-            """
-            let result = await session.executeJS(js)
-            if let result, result.hasPrefix("BANNER:") {
-                let bannerText = String(result.dropFirst(7))
-                onLog?("TRUE DETECTION: Error banner detected — '\(bannerText)'", .error)
-                logger.log("TrueDetection: error banner '\(bannerText)'", category: .evaluation, level: .critical, sessionId: sessionId)
-                return .errorBanner
-            }
-        }
+        // CRIMSON SWEEP: Legacy DOM-based error banner detection REMOVED.
+        // Red banner detection is now handled exclusively by ThickRedDetectEngine (pixel sniper).
+        // See CrimsonSweepOrchestrator.executeCrimsonPipeline() for the new pathway.
 
         return nil
     }
 
+    // CRIMSON SWEEP: Legacy captureErrorBannerCrop REMOVED.
+    // DOM-based banner cropping replaced by ThickRedDetectEngine pixel sampling.
     func captureErrorBannerCrop(
         session: LoginSiteWebSession,
         config: TrueDetectionConfig
     ) async -> UIImage? {
-        guard let fullScreenshot = await session.captureScreenshot() else { return nil }
-        guard let webView = session.webView else { return fullScreenshot }
-
-        for bannerSelector in config.errorBannerSelectors {
-            let escaped = bannerSelector.replacingOccurrences(of: "'", with: "\\'")
-            let js = """
-            (function() {
-                var el = document.querySelector('\(escaped)');
-                if (!el || el.offsetParent === null) return null;
-                var rect = el.getBoundingClientRect();
-                return JSON.stringify({x: rect.left, y: rect.top, w: rect.width, h: rect.height});
-            })();
-            """
-            if let result = await session.executeJS(js),
-               let data = result.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Double],
-               let x = json["x"], let y = json["y"], let w = json["w"], let h = json["h"],
-               w > 10, h > 10 {
-
-                let viewSize = webView.bounds.size
-                guard let cgImage = fullScreenshot.cgImage else { return fullScreenshot }
-                let imageW = CGFloat(cgImage.width)
-                let imageH = CGFloat(cgImage.height)
-                let scaleX = imageW / viewSize.width
-                let scaleY = imageH / viewSize.height
-
-                let padding: CGFloat = 10
-                let cropRect = CGRect(
-                    x: max(0, x * scaleX - padding),
-                    y: max(0, y * scaleY - padding),
-                    width: min(imageW, w * scaleX + padding * 2),
-                    height: min(imageH, h * scaleY + padding * 2)
-                )
-
-                if let croppedCG = cgImage.cropping(to: cropRect) {
-                    return UIImage(cgImage: croppedCG, scale: fullScreenshot.scale, orientation: fullScreenshot.imageOrientation)
-                }
-            }
-        }
-
-        return fullScreenshot
+        return await session.captureScreenshot()
     }
 }

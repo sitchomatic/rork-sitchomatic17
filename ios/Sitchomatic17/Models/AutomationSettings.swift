@@ -301,6 +301,11 @@ nonisolated struct AutomationSettings: Codable, Sendable {
     // MARK: - AI Telemetry
     var aiTelemetryEnabled: Bool = true
 
+    // MARK: - Login Submission Method (Crimson Sweep Phase 1)
+    var isGlobalSubmitSyncActive: Bool = true
+    var joeSubmitMethod: SubmitMethod = .tripleClickSynced
+    var ignitionSubmitMethod: SubmitMethod = .tripleClickSynced
+
     // MARK: - Recorded Flow Override
     var urlFlowAssignments: [URLFlowAssignment] = []
 
@@ -406,6 +411,28 @@ nonisolated struct AutomationSettings: Codable, Sendable {
         case tripleClickDelete = "Triple Click + Delete"
         case jsValueClear = "JS Value Clear"
         case backspaceLoop = "Backspace Loop"
+    }
+
+    nonisolated enum SubmitMethod: String, Codable, CaseIterable, Identifiable, Sendable {
+        case tripleClickSynced = "Triple-Click Synced"
+        case singleClickJS = "Single Click (JS)"
+        case coordinateClick = "Coordinate Click"
+        case enterKeySubmit = "Enter Key Submit"
+        case formSubmitDirect = "Form Submit Direct"
+        case pointerDispatch = "Pointer+Touch Dispatch"
+
+        nonisolated var id: String { rawValue }
+
+        nonisolated var summary: String {
+            switch self {
+            case .tripleClickSynced: "4-cycle triple-click with button color detection"
+            case .singleClickJS: "Single JS click event dispatch"
+            case .coordinateClick: "Pixel-precise coordinate click with jitter"
+            case .enterKeySubmit: "Simulated Enter key on password field"
+            case .formSubmitDirect: "Direct HTMLFormElement.submit() call"
+            case .pointerDispatch: "Full pointer+touch event chain dispatch"
+            }
+        }
     }
 }
 

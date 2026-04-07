@@ -10,6 +10,7 @@ class StrictLoginDetectionEngine {
     private let grokService = RorkToolkitService.shared
     private let settlementGate = SettlementGateEngine.shared
     private let coordEngine = CoordinateInteractionEngine.shared
+    private let submitRouter = SubmitMethodRouter.shared
 
     nonisolated enum DetectionModule: Sendable {
         case standard
@@ -218,7 +219,24 @@ class StrictLoginDetectionEngine {
         module: DetectionModule,
         sessionId: String
     ) async -> DetectionResult {
+        let currentURL = (await session.executeJS("(function(){try{return window.location.href||'';}catch(e){return'';}})()")  ?? "").lowercased()
         let pageContent = (await session.getPageContent() ?? "").lowercased()
+
+        // Check for about:blank or empty content
+        if currentURL == "about:blank" || currentURL.isEmpty || pageContent.count < 80 {
+            logger.log("StrictDetection: blank page or minimal content detected — returning unsure", category: .evaluation, level: .warning, sessionId: sessionId)
+            return DetectionResult(
+                outcome: .unsure,
+                phase: "P0_blank",
+                reason: "Page is about:blank or content length < 80 chars",
+                incorrectDetectedViaDOM: false,
+                incorrectDetectedViaOCR: false,
+                buttonCycleCompleted: false,
+                retryPerformed: false,
+                detectedIncorrect: false
+            )
+        }
+
         let screenshot = await session.captureScreenshot()
 
         let p1Override = await evaluateImmediateOverrides(
@@ -286,6 +304,7 @@ class StrictLoginDetectionEngine {
         submitSelectors: [String],
         fallbackSelectors: [String],
         sessionId: String,
+        submitMethod: AutomationSettings.SubmitMethod = .tripleClickSynced,
         onLog: ((String, PPSRLogEntry.Level) -> Void)? = nil
     ) async -> DetectionResult {
         let preContent = (await session.getPageContent() ?? "").lowercased()
@@ -317,15 +336,15 @@ class StrictLoginDetectionEngine {
             sessionId: sessionId
         )
 
-        onLog?("StrictDetection P3: triple-click submit", .info)
-        let tripleResult = await coordEngine.tripleClickWithEscalatingDwell(
+        onLog?("StrictDetection P3: submit via \(submitMethod.rawValue)", .info)
+        let submitResult = await submitRouter.executeSubmit(
+            method: submitMethod,
             selectors: submitSelectors,
             fallbackSelectors: fallbackSelectors,
             executeJS: executeJS,
-            jitterPx: 3,
             sessionId: sessionId
         )
-        onLog?("StrictDetection P3: triple-click \(tripleResult.success ? "OK" : "PARTIAL") (\(tripleResult.clicksCompleted)/3)", tripleResult.success ? .success : .warning)
+        onLog?("StrictDetection P3: submit \(submitResult.success ? "OK" : "FAILED") (\(submitResult.clicksCompleted) clicks via \(submitResult.method))", submitResult.success ? .success : .warning)
 
         var buttonCycleOk = false
         if let fingerprint = preClickFingerprint {
@@ -381,14 +400,14 @@ class StrictLoginDetectionEngine {
             sessionId: sessionId
         )
 
-        let retryTriple = await coordEngine.tripleClickWithEscalatingDwell(
+        let retrySubmit = await submitRouter.executeSubmit(
+            method: submitMethod,
             selectors: submitSelectors,
             fallbackSelectors: fallbackSelectors,
             executeJS: executeJS,
-            jitterPx: 3,
             sessionId: sessionId
         )
-        onLog?("StrictDetection P4-Step8: retry triple-click \(retryTriple.success ? "OK" : "PARTIAL")", retryTriple.success ? .info : .warning)
+        onLog?("StrictDetection P4-Step8: retry submit \(retrySubmit.success ? "OK" : "FAILED") via \(retrySubmit.method)", retrySubmit.success ? .info : .warning)
 
         if let fp = retryFingerprint {
             let retrySettlement = await settlementGate.waitForSettlement(

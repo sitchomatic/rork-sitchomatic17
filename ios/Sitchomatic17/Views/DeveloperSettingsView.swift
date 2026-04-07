@@ -23,6 +23,7 @@ struct DeveloperSettingsView: View {
                 if shouldShow("pattern strategy") { collapsibleSection("pattern", title: "Pattern Strategy", icon: "list.number", color: .purple) { patternContent } }
                 if shouldShow("fallback chain") { collapsibleSection("fallback", title: "Fallback Chain", icon: "arrow.triangle.branch", color: .mint) { fallbackContent } }
                 if shouldShow("submit behavior") { collapsibleSection("submit", title: "Submit Behavior", icon: "paperplane.fill", color: .teal) { submitContent } }
+                if shouldShow("login submission method") { collapsibleSection("submitMethod", title: "Login Submission Method", icon: "bolt.horizontal.fill", color: .red) { submitMethodContent } }
                 if shouldShow("post submit evaluation") { collapsibleSection("postSubmit", title: "Post-Submit Evaluation", icon: "checkmark.diamond.fill", color: .green) { postSubmitContent } }
                 if shouldShow("retry requeue") { collapsibleSection("retry", title: "Retry / Requeue", icon: "arrow.clockwise", color: .orange) { retryContent } }
                 if shouldShow("stealth fingerprint") { collapsibleSection("stealth", title: "Stealth / Fingerprinting", icon: "eye.slash.fill", color: .purple) { stealthContent } }
@@ -89,13 +90,13 @@ struct DeveloperSettingsView: View {
     // MARK: - Section Keys & Labels
 
     private var allSectionKeys: [String] {
-        ["trueDetection","pageLoading","fieldDetection","cookie","credential","pattern","fallback","submit","postSubmit","retry","stealth","screenshot","concurrency","network","url","blacklist","human","loginButton","delays","mfa","captcha","session","blankPage","errorClass","formInteraction","viewport","settlement","ai"]
+        ["trueDetection","pageLoading","fieldDetection","cookie","credential","pattern","fallback","submit","submitMethod","postSubmit","retry","stealth","screenshot","concurrency","network","url","blacklist","human","loginButton","delays","mfa","captcha","session","blankPage","errorClass","formInteraction","viewport","settlement","ai"]
     }
 
     private static let sectionLabels: [String: String] = [
         "trueDetection": "TRUE DETECTION", "pageLoading": "Page Loading", "fieldDetection": "Field Detection",
         "cookie": "Cookie", "credential": "Credential Entry", "pattern": "Pattern Strategy",
-        "fallback": "Fallback Chain", "submit": "Submit Behavior", "postSubmit": "Post-Submit",
+        "fallback": "Fallback Chain", "submit": "Submit Behavior", "submitMethod": "Submit Method", "postSubmit": "Post-Submit",
         "retry": "Retry/Requeue", "stealth": "Stealth", "screenshot": "Screenshot",
         "concurrency": "Concurrency", "network": "Network", "url": "URL Rotation",
         "blacklist": "Blacklist", "human": "Human Sim", "loginButton": "Login Button",
@@ -145,6 +146,9 @@ struct DeveloperSettingsView: View {
         if settings.fallbackToOCRClick != d.fallbackToOCRClick { count += 1 }
         if settings.fallbackToVisionMLClick != d.fallbackToVisionMLClick { count += 1 }
         if settings.fallbackToCoordinateClick != d.fallbackToCoordinateClick { count += 1 }
+        if settings.joeSubmitMethod != d.joeSubmitMethod { count += 1 }
+        if settings.ignitionSubmitMethod != d.ignitionSubmitMethod { count += 1 }
+        if settings.isGlobalSubmitSyncActive != d.isGlobalSubmitSyncActive { count += 1 }
         if settings.submitRetryCount != d.submitRetryCount { count += 1 }
         if settings.submitRetryDelayMs != d.submitRetryDelayMs { count += 1 }
         if settings.waitForResponseSeconds != d.waitForResponseSeconds { count += 1 }
@@ -235,7 +239,7 @@ struct DeveloperSettingsView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("28 sections")
+                    Text("29 sections")
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.tertiary)
                     Text("180s timeout floor")
@@ -473,6 +477,40 @@ struct DeveloperSettingsView: View {
         devInt("Rapid Poll Interval (ms)", $settings.rapidPollIntervalMs)
             .disabled(!settings.rapidPollEnabled)
             .opacity(settings.rapidPollEnabled ? 1 : 0.4)
+    }
+
+    @ViewBuilder private var submitMethodContent: some View {
+        devToggle("Global Sync (both sites)", $settings.isGlobalSubmitSyncActive)
+        Picker("Joe Submit Method", selection: $settings.joeSubmitMethod) {
+            ForEach(AutomationSettings.SubmitMethod.allCases) { m in
+                Text(m.rawValue).tag(m)
+            }
+        }.font(.subheadline)
+        .onChange(of: settings.joeSubmitMethod) { _, newValue in
+            if settings.isGlobalSubmitSyncActive {
+                settings.ignitionSubmitMethod = newValue
+            }
+        }
+        if !settings.isGlobalSubmitSyncActive {
+            Picker("Ignition Submit Method", selection: $settings.ignitionSubmitMethod) {
+                ForEach(AutomationSettings.SubmitMethod.allCases) { m in
+                    Text(m.rawValue).tag(m)
+                }
+            }.font(.subheadline)
+        } else {
+            HStack {
+                Text("Ignition Submit Method").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Text(settings.joeSubmitMethod.rawValue)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle").foregroundStyle(.blue).font(.caption2)
+            Text(settings.joeSubmitMethod.summary)
+                .font(.caption2).foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder private var postSubmitContent: some View {
