@@ -977,7 +977,9 @@ class AppDataExportService {
         guard !newLines.isEmpty else { return existing }
 
         if existingTrimmed.isEmpty {
-            return appendBoundedNote(existing: "", incoming: newLines.joined(separator: "\n")).trimmingCharacters(in: .whitespacesAndNewlines)
+            let incomingBlock = newLines.joined(separator: "\n")
+            guard incomingBlock.count > maxMergedNotesLength else { return incomingBlock }
+            return "…" + String(incomingBlock.suffix(maxMergedNotesLength - 1))
         }
         return appendBoundedNote(existing: existingTrimmed, incoming: newLines.joined(separator: "\n"))
     }
