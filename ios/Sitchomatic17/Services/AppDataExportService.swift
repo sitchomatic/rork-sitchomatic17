@@ -789,10 +789,12 @@ class AppDataExportService {
             changed = true
         }
 
-        let mergedNotes = mergeNotesLineWise(existing: existing.notes, incoming: incoming.notes)
-        if mergedNotes != existing.notes {
-            existing.notes = mergedNotes
-            changed = true
+        if !incoming.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let mergedNotes = mergeNotesLineWise(existing: existing.notes, incoming: incoming.notes)
+            if mergedNotes != existing.notes {
+                existing.notes = mergedNotes
+                changed = true
+            }
         }
 
         let originalExistingPasswords = existing.assignedPasswords
@@ -964,11 +966,10 @@ class AppDataExportService {
         guard !incomingLines.isEmpty else { return existing }
 
         let existingTrimmed = existing.trimmingCharacters(in: .whitespacesAndNewlines)
-        var existingLineSet = Set(
-            existingTrimmed.components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-        )
+        let existingLines = existingTrimmed.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var existingLineSet = Set(existingLines)
 
         var newLines: [String] = []
         for line in incomingLines where existingLineSet.insert(line).inserted {
