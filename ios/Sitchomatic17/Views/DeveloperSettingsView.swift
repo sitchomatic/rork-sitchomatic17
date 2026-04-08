@@ -106,91 +106,321 @@ struct DeveloperSettingsView: View {
         "ai": "AI Telemetry"
     ]
 
-    // MARK: - Modified Count (Comprehensive)
+    // MARK: - Per-Section Modified Counts
+
+    private func sectionModifiedCount(_ key: String) -> Int {
+        let d = defaults
+        let s = settings
+        switch key {
+        case "trueDetection":
+            return [
+                s.trueDetectionEnabled != d.trueDetectionEnabled,
+                s.trueDetectionPriority != d.trueDetectionPriority,
+                s.trueDetectionHardPauseMs != d.trueDetectionHardPauseMs,
+                s.trueDetectionTripleClickCount != d.trueDetectionTripleClickCount,
+                s.trueDetectionTripleClickDelayMs != d.trueDetectionTripleClickDelayMs,
+                s.trueDetectionSubmitCycleCount != d.trueDetectionSubmitCycleCount,
+                s.trueDetectionButtonRecoveryTimeoutMs != d.trueDetectionButtonRecoveryTimeoutMs,
+                s.trueDetectionMaxAttempts != d.trueDetectionMaxAttempts,
+                s.trueDetectionPostClickWaitMs != d.trueDetectionPostClickWaitMs,
+                s.trueDetectionCooldownMinutes != d.trueDetectionCooldownMinutes,
+                s.trueDetectionStrictWaits != d.trueDetectionStrictWaits,
+                s.trueDetectionNoProxyRotation != d.trueDetectionNoProxyRotation,
+                s.trueDetectionIgnorePlaceholders != d.trueDetectionIgnorePlaceholders,
+                s.trueDetectionIgnoreXPaths != d.trueDetectionIgnoreXPaths,
+                s.trueDetectionIgnoreClassNames != d.trueDetectionIgnoreClassNames,
+            ].filter { $0 }.count
+        case "pageLoading":
+            return [
+                s.pageLoadTimeout != d.pageLoadTimeout,
+                s.pageLoadRetries != d.pageLoadRetries,
+                s.retryBackoffMultiplier != d.retryBackoffMultiplier,
+                s.waitForJSRenderMs != d.waitForJSRenderMs,
+                s.fullSessionResetOnFinalRetry != d.fullSessionResetOnFinalRetry,
+            ].filter { $0 }.count
+        case "fieldDetection":
+            return [
+                s.fieldVerificationEnabled != d.fieldVerificationEnabled,
+                s.fieldVerificationTimeout != d.fieldVerificationTimeout,
+                s.autoCalibrationEnabled != d.autoCalibrationEnabled,
+                s.visionMLCalibrationFallback != d.visionMLCalibrationFallback,
+                s.calibrationConfidenceThreshold != d.calibrationConfidenceThreshold,
+            ].filter { $0 }.count
+        case "cookie":
+            return [
+                s.dismissCookieNotices != d.dismissCookieNotices,
+                s.cookieDismissDelayMs != d.cookieDismissDelayMs,
+            ].filter { $0 }.count
+        case "credential":
+            return [
+                s.typingSpeedMinMs != d.typingSpeedMinMs,
+                s.typingSpeedMaxMs != d.typingSpeedMaxMs,
+                s.typingJitterEnabled != d.typingJitterEnabled,
+                s.occasionalBackspaceEnabled != d.occasionalBackspaceEnabled,
+                s.backspaceProbability != d.backspaceProbability,
+                s.fieldFocusDelayMs != d.fieldFocusDelayMs,
+                s.interFieldDelayMs != d.interFieldDelayMs,
+                s.preFillPauseMinMs != d.preFillPauseMinMs,
+                s.preFillPauseMaxMs != d.preFillPauseMaxMs,
+            ].filter { $0 }.count
+        case "pattern":
+            return [
+                s.maxSubmitCycles != d.maxSubmitCycles,
+                s.preferCalibratedPatternsFirst != d.preferCalibratedPatternsFirst,
+                s.patternLearningEnabled != d.patternLearningEnabled,
+                s.enabledPatterns != d.enabledPatterns,
+                s.patternPriorityOrder != d.patternPriorityOrder,
+            ].filter { $0 }.count
+        case "fallback":
+            return [
+                s.fallbackToLegacyFill != d.fallbackToLegacyFill,
+                s.fallbackToOCRClick != d.fallbackToOCRClick,
+                s.fallbackToVisionMLClick != d.fallbackToVisionMLClick,
+                s.fallbackToCoordinateClick != d.fallbackToCoordinateClick,
+            ].filter { $0 }.count
+        case "submit":
+            return [
+                s.submitRetryCount != d.submitRetryCount,
+                s.submitRetryDelayMs != d.submitRetryDelayMs,
+                s.waitForResponseSeconds != d.waitForResponseSeconds,
+                s.rapidPollEnabled != d.rapidPollEnabled,
+                s.rapidPollIntervalMs != d.rapidPollIntervalMs,
+            ].filter { $0 }.count
+        case "submitMethod":
+            return [
+                s.isGlobalSubmitSyncActive != d.isGlobalSubmitSyncActive,
+                s.joeSubmitMethod != d.joeSubmitMethod,
+                s.ignitionSubmitMethod != d.ignitionSubmitMethod,
+            ].filter { $0 }.count
+        case "postSubmit":
+            return [
+                s.redirectDetection != d.redirectDetection,
+                s.errorBannerDetection != d.errorBannerDetection,
+                s.contentChangeDetection != d.contentChangeDetection,
+                s.evaluationStrictness != d.evaluationStrictness,
+                s.capturePageContent != d.capturePageContent,
+            ].filter { $0 }.count
+        case "retry":
+            return [
+                s.requeueOnTimeout != d.requeueOnTimeout,
+                s.requeueOnConnectionFailure != d.requeueOnConnectionFailure,
+                s.requeueOnUnsure != d.requeueOnUnsure,
+                s.requeueOnRedBanner != d.requeueOnRedBanner,
+                s.maxRequeueCount != d.maxRequeueCount,
+                s.minAttemptsBeforeNoAcc != d.minAttemptsBeforeNoAcc,
+                s.cyclePauseMinMs != d.cyclePauseMinMs,
+                s.cyclePauseMaxMs != d.cyclePauseMaxMs,
+            ].filter { $0 }.count
+        case "stealth":
+            return [
+                s.stealthJSInjection != d.stealthJSInjection,
+                s.fingerprintValidationEnabled != d.fingerprintValidationEnabled,
+                s.hostFingerprintLearningEnabled != d.hostFingerprintLearningEnabled,
+                s.fingerprintSpoofing != d.fingerprintSpoofing,
+                s.userAgentRotation != d.userAgentRotation,
+                s.viewportRandomization != d.viewportRandomization,
+                s.webGLNoise != d.webGLNoise,
+                s.canvasNoise != d.canvasNoise,
+                s.audioContextNoise != d.audioContextNoise,
+                s.timezoneSpoof != d.timezoneSpoof,
+                s.languageSpoof != d.languageSpoof,
+            ].filter { $0 }.count
+        case "screenshot":
+            return [
+                s.slowDebugMode != d.slowDebugMode,
+                s.screenshotOnEveryEval != d.screenshotOnEveryEval,
+                s.screenshotOnFailure != d.screenshotOnFailure,
+                s.screenshotOnSuccess != d.screenshotOnSuccess,
+                s.maxScreenshotRetention != d.maxScreenshotRetention,
+                s.screenshotsPerAttempt != d.screenshotsPerAttempt,
+                s.unifiedScreenshotsPerAttempt != d.unifiedScreenshotsPerAttempt,
+                s.unifiedScreenshotPostClickDelayMs != d.unifiedScreenshotPostClickDelayMs,
+                s.postSubmitScreenshotTimings != d.postSubmitScreenshotTimings,
+                s.postSubmitScreenshotsOnly != d.postSubmitScreenshotsOnly,
+            ].filter { $0 }.count
+        case "concurrency":
+            return [
+                s.maxConcurrency != d.maxConcurrency,
+                s.concurrencyStrategy != d.concurrencyStrategy,
+                s.fixedPairCount != d.fixedPairCount,
+                s.liveUserPairCount != d.liveUserPairCount,
+                s.batchDelayBetweenStartsMs != d.batchDelayBetweenStartsMs,
+                s.connectionTestBeforeBatch != d.connectionTestBeforeBatch,
+            ].filter { $0 }.count
+        case "network":
+            return [
+                s.useAssignedNetworkForTests != d.useAssignedNetworkForTests,
+                s.proxyRotateOnDisabled != d.proxyRotateOnDisabled,
+                s.proxyRotateOnFailure != d.proxyRotateOnFailure,
+                s.dnsRotatePerRequest != d.dnsRotatePerRequest,
+                s.vpnConfigRotation != d.vpnConfigRotation,
+            ].filter { $0 }.count
+        case "url":
+            return [
+                s.urlRotationEnabled != d.urlRotationEnabled,
+                s.disableURLAfterConsecutiveFailures != d.disableURLAfterConsecutiveFailures,
+                s.reEnableURLAfterSeconds != d.reEnableURLAfterSeconds,
+                s.preferFastestURL != d.preferFastestURL,
+                s.smartURLSelection != d.smartURLSelection,
+            ].filter { $0 }.count
+        case "blacklist":
+            return [
+                s.autoBlacklistNoAcc != d.autoBlacklistNoAcc,
+                s.autoBlacklistPermDisabled != d.autoBlacklistPermDisabled,
+                s.autoExcludeBlacklist != d.autoExcludeBlacklist,
+            ].filter { $0 }.count
+        case "human":
+            return [
+                s.humanMouseMovement != d.humanMouseMovement,
+                s.humanScrollJitter != d.humanScrollJitter,
+                s.randomPreActionPause != d.randomPreActionPause,
+                s.preActionPauseMinMs != d.preActionPauseMinMs,
+                s.preActionPauseMaxMs != d.preActionPauseMaxMs,
+                s.gaussianTimingDistribution != d.gaussianTimingDistribution,
+            ].filter { $0 }.count
+        case "loginButton":
+            return [
+                s.loginButtonDetectionMode != d.loginButtonDetectionMode,
+                s.loginButtonClickMethod != d.loginButtonClickMethod,
+                s.loginButtonPreClickDelayMs != d.loginButtonPreClickDelayMs,
+                s.loginButtonPostClickDelayMs != d.loginButtonPostClickDelayMs,
+                s.loginButtonDoubleClickGuard != d.loginButtonDoubleClickGuard,
+                s.loginButtonScrollIntoView != d.loginButtonScrollIntoView,
+                s.loginButtonWaitForEnabled != d.loginButtonWaitForEnabled,
+                s.loginButtonHoverBeforeClick != d.loginButtonHoverBeforeClick,
+                s.loginButtonClickOffsetJitter != d.loginButtonClickOffsetJitter,
+                s.loginButtonConfidenceThreshold != d.loginButtonConfidenceThreshold,
+            ].filter { $0 }.count
+        case "delays":
+            return [
+                s.globalPreActionDelayMs != d.globalPreActionDelayMs,
+                s.globalPostActionDelayMs != d.globalPostActionDelayMs,
+                s.preNavigationDelayMs != d.preNavigationDelayMs,
+                s.postNavigationDelayMs != d.postNavigationDelayMs,
+                s.preTypingDelayMs != d.preTypingDelayMs,
+                s.postTypingDelayMs != d.postTypingDelayMs,
+                s.preSubmitDelayMs != d.preSubmitDelayMs,
+                s.postSubmitDelayMs != d.postSubmitDelayMs,
+                s.betweenAttemptsDelayMs != d.betweenAttemptsDelayMs,
+                s.betweenCredentialsDelayMs != d.betweenCredentialsDelayMs,
+                s.delayRandomizationEnabled != d.delayRandomizationEnabled,
+                s.delayRandomizationPercent != d.delayRandomizationPercent,
+            ].filter { $0 }.count
+        case "mfa":
+            return [
+                s.mfaDetectionEnabled != d.mfaDetectionEnabled,
+                s.mfaWaitTimeoutSeconds != d.mfaWaitTimeoutSeconds,
+                s.mfaAutoSkip != d.mfaAutoSkip,
+                s.mfaMarkAsTempDisabled != d.mfaMarkAsTempDisabled,
+                s.smsDetectionEnabled != d.smsDetectionEnabled,
+                s.smsBurnSession != d.smsBurnSession,
+            ].filter { $0 }.count
+        case "captcha":
+            return [
+                s.captchaDetectionEnabled != d.captchaDetectionEnabled,
+                s.captchaAutoSkip != d.captchaAutoSkip,
+                s.captchaMarkAsFailed != d.captchaMarkAsFailed,
+                s.captchaWaitTimeoutSeconds != d.captchaWaitTimeoutSeconds,
+                s.captchaIframeDetection != d.captchaIframeDetection,
+                s.captchaImageDetection != d.captchaImageDetection,
+            ].filter { $0 }.count
+        case "session":
+            return [
+                s.sessionIsolation != d.sessionIsolation,
+                s.clearCookiesBetweenAttempts != d.clearCookiesBetweenAttempts,
+                s.clearLocalStorageBetweenAttempts != d.clearLocalStorageBetweenAttempts,
+                s.clearSessionStorageBetweenAttempts != d.clearSessionStorageBetweenAttempts,
+                s.clearCacheBetweenAttempts != d.clearCacheBetweenAttempts,
+                s.clearIndexedDBBetweenAttempts != d.clearIndexedDBBetweenAttempts,
+                s.freshWebViewPerAttempt != d.freshWebViewPerAttempt,
+                s.webViewMemoryLimitMB != d.webViewMemoryLimitMB,
+            ].filter { $0 }.count
+        case "blankPage":
+            return [
+                s.blankPageRecoveryEnabled != d.blankPageRecoveryEnabled,
+                s.blankPageTimeoutSeconds != d.blankPageTimeoutSeconds,
+                s.blankPageWaitThresholdSeconds != d.blankPageWaitThresholdSeconds,
+                s.blankPageMaxFallbackAttempts != d.blankPageMaxFallbackAttempts,
+            ].filter { $0 }.count
+        case "errorClass":
+            return [
+                s.networkErrorAutoRetry != d.networkErrorAutoRetry,
+                s.sslErrorAutoRetry != d.sslErrorAutoRetry,
+                s.http403MarkAsBlocked != d.http403MarkAsBlocked,
+                s.http429RetryAfterSeconds != d.http429RetryAfterSeconds,
+                s.http5xxAutoRetry != d.http5xxAutoRetry,
+                s.connectionResetAutoRetry != d.connectionResetAutoRetry,
+                s.dnsFailureAutoRetry != d.dnsFailureAutoRetry,
+                s.classifyUnknownAsUnsure != d.classifyUnknownAsUnsure,
+            ].filter { $0 }.count
+        case "formInteraction":
+            return [
+                s.clearFieldsBeforeTyping != d.clearFieldsBeforeTyping,
+                s.clearFieldMethod != d.clearFieldMethod,
+                s.tabBetweenFields != d.tabBetweenFields,
+                s.clickFieldBeforeTyping != d.clickFieldBeforeTyping,
+                s.verifyFieldValueAfterTyping != d.verifyFieldValueAfterTyping,
+                s.retypeOnVerificationFailure != d.retypeOnVerificationFailure,
+                s.autoDetectRememberMe != d.autoDetectRememberMe,
+                s.uncheckRememberMe != d.uncheckRememberMe,
+            ].filter { $0 }.count
+        case "viewport":
+            return [
+                s.viewportWidth != d.viewportWidth,
+                s.viewportHeight != d.viewportHeight,
+                s.smartFingerprintReuse != d.smartFingerprintReuse,
+                s.viewportSizeVariancePx != d.viewportSizeVariancePx,
+                s.mobileViewportEmulation != d.mobileViewportEmulation,
+                s.deviceScaleFactor != d.deviceScaleFactor,
+            ].filter { $0 }.count
+        case "settlement":
+            return [
+                s.v42SettlementGateEnabled != d.v42SettlementGateEnabled,
+                s.v42SettlementMaxTimeoutMs != d.v42SettlementMaxTimeoutMs,
+                s.v42ButtonStabilityMs != d.v42ButtonStabilityMs,
+                s.v42HoverDwellMs != d.v42HoverDwellMs,
+                s.v42ClickJitterPx != d.v42ClickJitterPx,
+                s.v42InterAttemptDelayMinSec != d.v42InterAttemptDelayMinSec,
+                s.v42InterAttemptDelayMaxSec != d.v42InterAttemptDelayMaxSec,
+                s.v42HumanVarianceMinMs != d.v42HumanVarianceMinMs,
+                s.v42HumanVarianceMaxMs != d.v42HumanVarianceMaxMs,
+                s.v42StrictClassification != d.v42StrictClassification,
+                s.v42CoordinateInteractionOnly != d.v42CoordinateInteractionOnly,
+            ].filter { $0 }.count
+        case "ai":
+            return [
+                s.aiTelemetryEnabled != d.aiTelemetryEnabled,
+            ].filter { $0 }.count
+        default: return 0
+        }
+    }
+
+    private func sectionHasIssues(_ key: String) -> Bool {
+        switch key {
+        case "credential":
+            return settings.typingSpeedMinMs > settings.typingSpeedMaxMs ||
+                   settings.preFillPauseMinMs > settings.preFillPauseMaxMs
+        case "retry":
+            return settings.cyclePauseMinMs > settings.cyclePauseMaxMs
+        case "human":
+            return settings.preActionPauseMinMs > settings.preActionPauseMaxMs
+        case "settlement":
+            return settings.v42InterAttemptDelayMinSec > settings.v42InterAttemptDelayMaxSec ||
+                   settings.v42HumanVarianceMinMs > settings.v42HumanVarianceMaxMs
+        default: return false
+        }
+    }
 
     private var modifiedCount: Int {
-        let d = defaults
-        var count = 0
-        if settings.trueDetectionEnabled != d.trueDetectionEnabled { count += 1 }
-        if settings.trueDetectionPriority != d.trueDetectionPriority { count += 1 }
-        if settings.trueDetectionHardPauseMs != d.trueDetectionHardPauseMs { count += 1 }
-        if settings.trueDetectionTripleClickCount != d.trueDetectionTripleClickCount { count += 1 }
-        if settings.trueDetectionTripleClickDelayMs != d.trueDetectionTripleClickDelayMs { count += 1 }
-        if settings.trueDetectionSubmitCycleCount != d.trueDetectionSubmitCycleCount { count += 1 }
-        if settings.trueDetectionButtonRecoveryTimeoutMs != d.trueDetectionButtonRecoveryTimeoutMs { count += 1 }
-        if settings.trueDetectionMaxAttempts != d.trueDetectionMaxAttempts { count += 1 }
-        if settings.trueDetectionPostClickWaitMs != d.trueDetectionPostClickWaitMs { count += 1 }
-        if settings.trueDetectionCooldownMinutes != d.trueDetectionCooldownMinutes { count += 1 }
-        if settings.trueDetectionStrictWaits != d.trueDetectionStrictWaits { count += 1 }
-        if settings.trueDetectionNoProxyRotation != d.trueDetectionNoProxyRotation { count += 1 }
-        if settings.pageLoadTimeout != d.pageLoadTimeout { count += 1 }
-        if settings.pageLoadRetries != d.pageLoadRetries { count += 1 }
-        if settings.retryBackoffMultiplier != d.retryBackoffMultiplier { count += 1 }
-        if settings.waitForJSRenderMs != d.waitForJSRenderMs { count += 1 }
-        if settings.fullSessionResetOnFinalRetry != d.fullSessionResetOnFinalRetry { count += 1 }
-        if settings.fieldVerificationEnabled != d.fieldVerificationEnabled { count += 1 }
-        if settings.fieldVerificationTimeout != d.fieldVerificationTimeout { count += 1 }
-        if settings.autoCalibrationEnabled != d.autoCalibrationEnabled { count += 1 }
-        if settings.calibrationConfidenceThreshold != d.calibrationConfidenceThreshold { count += 1 }
-        if settings.dismissCookieNotices != d.dismissCookieNotices { count += 1 }
-        if settings.cookieDismissDelayMs != d.cookieDismissDelayMs { count += 1 }
-        if settings.typingSpeedMinMs != d.typingSpeedMinMs { count += 1 }
-        if settings.typingSpeedMaxMs != d.typingSpeedMaxMs { count += 1 }
-        if settings.backspaceProbability != d.backspaceProbability { count += 1 }
-        if settings.fieldFocusDelayMs != d.fieldFocusDelayMs { count += 1 }
-        if settings.interFieldDelayMs != d.interFieldDelayMs { count += 1 }
-        if settings.maxSubmitCycles != d.maxSubmitCycles { count += 1 }
-        if settings.patternLearningEnabled != d.patternLearningEnabled { count += 1 }
-        if settings.preferCalibratedPatternsFirst != d.preferCalibratedPatternsFirst { count += 1 }
-        if settings.fallbackToLegacyFill != d.fallbackToLegacyFill { count += 1 }
-        if settings.fallbackToOCRClick != d.fallbackToOCRClick { count += 1 }
-        if settings.fallbackToVisionMLClick != d.fallbackToVisionMLClick { count += 1 }
-        if settings.fallbackToCoordinateClick != d.fallbackToCoordinateClick { count += 1 }
-        if settings.joeSubmitMethod != d.joeSubmitMethod { count += 1 }
-        if settings.ignitionSubmitMethod != d.ignitionSubmitMethod { count += 1 }
-        if settings.isGlobalSubmitSyncActive != d.isGlobalSubmitSyncActive { count += 1 }
-        if settings.submitRetryCount != d.submitRetryCount { count += 1 }
-        if settings.submitRetryDelayMs != d.submitRetryDelayMs { count += 1 }
-        if settings.waitForResponseSeconds != d.waitForResponseSeconds { count += 1 }
-        if settings.rapidPollEnabled != d.rapidPollEnabled { count += 1 }
-        if settings.redirectDetection != d.redirectDetection { count += 1 }
-        if settings.errorBannerDetection != d.errorBannerDetection { count += 1 }
-        if settings.contentChangeDetection != d.contentChangeDetection { count += 1 }
-        if settings.maxConcurrency != d.maxConcurrency { count += 1 }
-        if settings.fixedPairCount != d.fixedPairCount { count += 1 }
-        if settings.liveUserPairCount != d.liveUserPairCount { count += 1 }
-        if settings.stealthJSInjection != d.stealthJSInjection { count += 1 }
-        if settings.fingerprintSpoofing != d.fingerprintSpoofing { count += 1 }
-        if settings.userAgentRotation != d.userAgentRotation { count += 1 }
-        if settings.viewportRandomization != d.viewportRandomization { count += 1 }
-        if settings.urlRotationEnabled != d.urlRotationEnabled { count += 1 }
-        if settings.reEnableURLAfterSeconds != d.reEnableURLAfterSeconds { count += 1 }
-        if settings.smartURLSelection != d.smartURLSelection { count += 1 }
-        if settings.proxyRotateOnDisabled != d.proxyRotateOnDisabled { count += 1 }
-        if settings.proxyRotateOnFailure != d.proxyRotateOnFailure { count += 1 }
-        if settings.v42SettlementGateEnabled != d.v42SettlementGateEnabled { count += 1 }
-        if settings.v42SettlementMaxTimeoutMs != d.v42SettlementMaxTimeoutMs { count += 1 }
-        if settings.betweenAttemptsDelayMs != d.betweenAttemptsDelayMs { count += 1 }
-        if settings.betweenCredentialsDelayMs != d.betweenCredentialsDelayMs { count += 1 }
-        if settings.globalPreActionDelayMs != d.globalPreActionDelayMs { count += 1 }
-        if settings.globalPostActionDelayMs != d.globalPostActionDelayMs { count += 1 }
-        if settings.mfaDetectionEnabled != d.mfaDetectionEnabled { count += 1 }
-        if settings.captchaDetectionEnabled != d.captchaDetectionEnabled { count += 1 }
-        if settings.blankPageRecoveryEnabled != d.blankPageRecoveryEnabled { count += 1 }
-        if settings.sessionIsolation != d.sessionIsolation { count += 1 }
-        if settings.freshWebViewPerAttempt != d.freshWebViewPerAttempt { count += 1 }
-        if settings.clearCookiesBetweenAttempts != d.clearCookiesBetweenAttempts { count += 1 }
-        if settings.aiTelemetryEnabled != d.aiTelemetryEnabled { count += 1 }
-        return count
+        allSectionKeys.reduce(0) { $0 + sectionModifiedCount($1) }
+    }
+
+    private var modifiedSectionCount: Int {
+        allSectionKeys.filter { sectionModifiedCount($0) > 0 }.count
     }
 
     private var hasValidationIssues: Bool {
-        settings.typingSpeedMinMs > settings.typingSpeedMaxMs ||
-        settings.preFillPauseMinMs > settings.preFillPauseMaxMs ||
-        settings.cyclePauseMinMs > settings.cyclePauseMaxMs ||
-        settings.preActionPauseMinMs > settings.preActionPauseMaxMs ||
-        settings.v42InterAttemptDelayMinSec > settings.v42InterAttemptDelayMaxSec ||
-        settings.v42HumanVarianceMinMs > settings.v42HumanVarianceMaxMs
+        allSectionKeys.contains { sectionHasIssues($0) }
     }
 
     private func shouldShow(_ keywords: String) -> Bool {
@@ -228,6 +458,11 @@ struct DeveloperSettingsView: View {
                             .font(.system(.subheadline, design: .monospaced, weight: .semibold))
                             .foregroundStyle(modifiedCount == 0 ? .green : .orange)
                     }
+                    if modifiedSectionCount > 0 {
+                        Text("\(modifiedSectionCount)/\(allSectionKeys.count) sections touched")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
                     if hasValidationIssues {
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -239,7 +474,7 @@ struct DeveloperSettingsView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("29 sections")
+                    Text("\(allSectionKeys.count) sections")
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.tertiary)
                     Text("180s timeout floor")
@@ -321,6 +556,8 @@ struct DeveloperSettingsView: View {
         NavigationStack {
             List {
                 ForEach(allSectionKeys, id: \.self) { key in
+                    let count = sectionModifiedCount(key)
+                    let hasIssues = sectionHasIssues(key)
                     Button {
                         expandedSections.insert(key)
                         showJumpMenu = false
@@ -329,7 +566,18 @@ struct DeveloperSettingsView: View {
                             withAnimation { proxy.scrollTo(key, anchor: .top) }
                         }
                     } label: {
-                        Text(Self.sectionLabels[key] ?? key).font(.subheadline)
+                        HStack {
+                            Circle()
+                                .fill(hasIssues ? .red : count > 0 ? .orange : .green)
+                                .frame(width: 6, height: 6)
+                            Text(Self.sectionLabels[key] ?? key).font(.subheadline)
+                            Spacer()
+                            if count > 0 {
+                                Text("\(count)")
+                                    .font(.system(.caption2, design: .monospaced).bold())
+                                    .foregroundStyle(.orange)
+                            }
+                        }
                     }
                 }
             }
@@ -348,7 +596,9 @@ struct DeveloperSettingsView: View {
     // MARK: - Collapsible Section
 
     private func collapsibleSection<Content: View>(_ key: String, title: String, icon: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
-        Section {
+        let count = sectionModifiedCount(key)
+        let hasIssues = sectionHasIssues(key)
+        return Section {
             if expandedSections.contains(key) {
                 content()
             }
@@ -365,6 +615,16 @@ struct DeveloperSettingsView: View {
                 HStack(spacing: 6) {
                     Image(systemName: icon).foregroundStyle(color).font(.caption)
                     Text(title).font(.caption.bold()).foregroundStyle(color)
+                    if hasIssues {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9)).foregroundStyle(.red)
+                    } else if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 9, design: .monospaced).bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.orange, in: Capsule())
+                    }
                     Spacer()
                     Image(systemName: expandedSections.contains(key) ? "chevron.up" : "chevron.down")
                         .font(.caption2).foregroundStyle(.tertiary)
