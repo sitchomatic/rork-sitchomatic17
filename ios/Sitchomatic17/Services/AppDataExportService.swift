@@ -789,8 +789,9 @@ class AppDataExportService {
             changed = true
         }
 
-        if !incoming.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let mergedNotes = mergeNotesLineWise(existing: existing.notes, incoming: incoming.notes)
+        let trimmedIncomingNotes = incoming.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedIncomingNotes.isEmpty {
+            let mergedNotes = mergeNotesLineWise(existing: existing.notes, incoming: trimmedIncomingNotes)
             if mergedNotes != existing.notes {
                 existing.notes = mergedNotes
                 changed = true
