@@ -583,8 +583,14 @@ class AppDataExportService {
 
         if !config.loginCredentials.isEmpty {
             var merged = LoginPersistenceService.shared.loadCredentials()
-            let credentialPairs = merged.enumerated().map { (credentialKey(username: $1.username, password: $1.password), $0) }
-            var indexByCredentialKey = Dictionary(uniqueKeysWithValues: credentialPairs)
+            var indexByCredentialKey: [String: Int] = [:]
+            for (index, credential) in merged.enumerated() {
+                let key = credentialKey(username: credential.username, password: credential.password)
+                if indexByCredentialKey[key] == nil {
+                    indexByCredentialKey[key] = index
+                }
+            }
+            var credentialConflictsResolved = 0
             for ec in config.loginCredentials {
                 let key = credentialKey(username: ec.username, password: ec.password)
                 let cred = LoginCredential(username: ec.username, password: ec.password, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
@@ -597,7 +603,7 @@ class AppDataExportService {
                 }
                 if let existingIndex = indexByCredentialKey[key] {
                     if mergeCredential(existing: merged[existingIndex], incoming: cred) {
-                        result.conflictsResolved += 1
+                        credentialConflictsResolved += 1
                     }
                 } else {
                     merged.append(cred)
@@ -605,15 +611,21 @@ class AppDataExportService {
                     result.credentialsImported += 1
                 }
             }
-            if result.credentialsImported > 0 || result.conflictsResolved > 0 {
+            if result.credentialsImported > 0 || credentialConflictsResolved > 0 {
                 LoginPersistenceService.shared.saveCredentials(merged)
             }
+            result.conflictsResolved += credentialConflictsResolved
         }
 
         if !config.ppsrCards.isEmpty {
             var merged = PPSRPersistenceService.shared.loadCards()
-            let cardPairs = merged.enumerated().map { ($1.number, $0) }
-            var indexByCardNumber = Dictionary(uniqueKeysWithValues: cardPairs)
+            var indexByCardNumber: [String: Int] = [:]
+            for (index, card) in merged.enumerated() {
+                if indexByCardNumber[card.number] == nil {
+                    indexByCardNumber[card.number] = index
+                }
+            }
+            var cardConflictsResolved = 0
             for ec in config.ppsrCards {
                 let card = PPSRCard(number: ec.number, expiryMonth: ec.expiryMonth, expiryYear: ec.expiryYear, cvv: ec.cvv, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
                 if let status = CardStatus(rawValue: ec.status) { card.status = status }
@@ -625,7 +637,7 @@ class AppDataExportService {
                 }
                 if let existingIndex = indexByCardNumber[ec.number] {
                     if mergeCard(existing: merged[existingIndex], incoming: card) {
-                        result.conflictsResolved += 1
+                        cardConflictsResolved += 1
                     }
                 } else {
                     merged.append(card)
@@ -633,9 +645,10 @@ class AppDataExportService {
                     result.cardsImported += 1
                 }
             }
-            if result.cardsImported > 0 || result.conflictsResolved > 0 {
+            if result.cardsImported > 0 || cardConflictsResolved > 0 {
                 PPSRPersistenceService.shared.saveCards(merged)
             }
+            result.conflictsResolved += cardConflictsResolved
         }
 
         if let loginSettings = config.loginAppSettings {
@@ -690,8 +703,12 @@ class AppDataExportService {
         if !config.recordedFlows.isEmpty {
             let flowService = FlowPersistenceService.shared
             var existingFlows = flowService.loadFlows()
-            let flowPairs = existingFlows.enumerated().map { ($1.id, $0) }
-            var indexByFlowId = Dictionary(uniqueKeysWithValues: flowPairs)
+            var indexByFlowId: [String: Int] = [:]
+            for (index, flow) in existingFlows.enumerated() {
+                if indexByFlowId[flow.id] == nil {
+                    indexByFlowId[flow.id] = index
+                }
+            }
             var added = 0
             var conflictsResolved = 0
             for flow in config.recordedFlows {
@@ -772,26 +789,21 @@ class AppDataExportService {
             changed = true
         }
 
-        let existingNotes = existing.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let incomingNotes = incoming.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !incomingNotes.isEmpty {
-            if existingNotes.isEmpty {
-                existing.notes = incomingNotes
-                changed = true
-            } else if existingNotes != incomingNotes && !containsExactNoteLine(existing: existingNotes, incoming: incomingNotes) {
-                existing.notes = appendBoundedNote(existing: existing.notes, incoming: incomingNotes)
-                changed = true
-            }
+        let mergedNotes = mergeNotesLineWise(existing: existing.notes, incoming: incoming.notes)
+        if mergedNotes != existing.notes {
+            existing.notes = mergedNotes
+            changed = true
         }
 
-        let mergedPasswords = mergeUniqueStrings(existing.assignedPasswords, incoming.assignedPasswords)
+        let originalExistingPasswords = existing.assignedPasswords
+        let mergedPasswords = mergeUniqueStrings(originalExistingPasswords, incoming.assignedPasswords)
         if mergedPasswords != existing.assignedPasswords {
             existing.assignedPasswords = mergedPasswords
             changed = true
         }
 
         let mergedNextPasswordIndex = resolveMergedPasswordIndex(
-            existingPasswords: existing.assignedPasswords,
+            existingPasswords: originalExistingPasswords,
             existingNextIndex: existing.nextPasswordIndex,
             incomingPasswords: incoming.assignedPasswords,
             incomingNextIndex: incoming.nextPasswordIndex,
@@ -844,12 +856,12 @@ class AppDataExportService {
         let existingScore = flowCompletenessScore(merged)
         if incomingScore > existingScore {
             merged.actions = incoming.actions
-            merged.actionCount = incoming.actionCount
+            merged.actionCount = merged.actions.count
             merged.totalDurationMs = incoming.totalDurationMs
             changed = true
         } else if incoming.actions.count > merged.actions.count {
             merged.actions = incoming.actions
-            merged.actionCount = max(merged.actionCount, max(incoming.actionCount, incoming.actions.count))
+            merged.actionCount = merged.actions.count
             if incoming.totalDurationMs > merged.totalDurationMs {
                 merged.totalDurationMs = incoming.totalDurationMs
             }
@@ -913,12 +925,6 @@ class AppDataExportService {
         return merged
     }
 
-    private func containsExactNoteLine(existing: String, incoming: String) -> Bool {
-        Set(existing.components(separatedBy: .newlines).map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        }).contains(incoming)
-    }
-
     private func resolveMergedPasswordIndex(
         existingPasswords: [String],
         existingNextIndex: Int,
@@ -949,6 +955,31 @@ class AppDataExportService {
         let combined = "\(existing)\n\(incoming)"
         guard combined.count > maxMergedNotesLength else { return combined }
         return "…" + String(combined.suffix(maxMergedNotesLength - 1))
+    }
+
+    private func mergeNotesLineWise(existing: String, incoming: String) -> String {
+        let incomingLines = incoming.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !incomingLines.isEmpty else { return existing }
+
+        let existingTrimmed = existing.trimmingCharacters(in: .whitespacesAndNewlines)
+        var existingLineSet = Set(
+            existingTrimmed.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+
+        var newLines: [String] = []
+        for line in incomingLines where existingLineSet.insert(line).inserted {
+            newLines.append(line)
+        }
+        guard !newLines.isEmpty else { return existing }
+
+        if existingTrimmed.isEmpty {
+            return appendBoundedNote(existing: "", incoming: newLines.joined(separator: "\n")).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return appendBoundedNote(existing: existingTrimmed, incoming: newLines.joined(separator: "\n"))
     }
 
     private func mergeLoginTestResults(_ first: [LoginTestResult], _ second: [LoginTestResult]) -> [LoginTestResult] {
