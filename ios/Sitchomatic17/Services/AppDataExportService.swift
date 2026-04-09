@@ -860,14 +860,12 @@ class AppDataExportService {
         if incomingScore > existingScore {
             merged.actions = incoming.actions
             merged.actionCount = merged.actions.count
-            merged.totalDurationMs = incoming.totalDurationMs
+            merged.totalDurationMs = merged.actions.reduce(0) { $0 + $1.deltaFromPreviousMs }
             changed = true
         } else if incoming.actions.count > merged.actions.count {
             merged.actions = incoming.actions
             merged.actionCount = merged.actions.count
-            if incoming.totalDurationMs > merged.totalDurationMs {
-                merged.totalDurationMs = incoming.totalDurationMs
-            }
+            merged.totalDurationMs = merged.actions.reduce(0) { $0 + $1.deltaFromPreviousMs }
             changed = true
         }
 
