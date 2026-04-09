@@ -869,13 +869,12 @@ class AppDataExportService {
             changed = true
         }
 
-        if merged.textboxMappings.isEmpty && !incoming.textboxMappings.isEmpty {
+        if shouldReplaceFlowTextboxMappings(current: merged.textboxMappings, incoming: incoming.textboxMappings) {
             merged.textboxMappings = incoming.textboxMappings
             changed = true
         }
 
-        if merged.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            !incoming.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if shouldReplaceFlowName(current: merged.name, incoming: incoming.name) {
             merged.name = incoming.name
             changed = true
         }
@@ -884,8 +883,22 @@ class AppDataExportService {
     }
 
     private func flowCompletenessScore(_ flow: RecordedFlow) -> Int {
-        let effectiveActionCount = max(flow.actionCount, flow.actions.count)
-        return (effectiveActionCount * flowActionWeight) + Int(flow.totalDurationMs.rounded())
+        let normalizedActionCount = flow.actions.count
+        let normalizedTotalDurationMs = flow.actions.reduce(0.0) { $0 + $1.deltaFromPreviousMs }
+        return (normalizedActionCount * flowActionWeight) + Int(normalizedTotalDurationMs.rounded())
+    }
+
+    private func shouldReplaceFlowTextboxMappings(
+        current: [RecordedFlow.TextboxMapping],
+        incoming: [RecordedFlow.TextboxMapping]
+    ) -> Bool {
+        !incoming.isEmpty && (current.isEmpty || incoming.count > current.count)
+    }
+
+    private func shouldReplaceFlowName(current: String, incoming: String) -> Bool {
+        let trimmedCurrent = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedIncoming = incoming.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmedIncoming.isEmpty && (trimmedCurrent.isEmpty || trimmedIncoming.count > trimmedCurrent.count)
     }
 
     private func shouldPromoteCredentialStatus(current: CredentialStatus, incoming: CredentialStatus) -> Bool {
