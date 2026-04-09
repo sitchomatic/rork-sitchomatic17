@@ -892,7 +892,27 @@ class AppDataExportService {
         current: [RecordedFlow.TextboxMapping],
         incoming: [RecordedFlow.TextboxMapping]
     ) -> Bool {
-        !incoming.isEmpty && (current.isEmpty || incoming.count > current.count)
+        guard !incoming.isEmpty else { return false }
+        if current.isEmpty { return true }
+        return flowTextboxMappingStrength(incoming) > flowTextboxMappingStrength(current)
+    }
+
+    private func flowTextboxMappingStrength(_ mappings: [RecordedFlow.TextboxMapping]) -> Int {
+        let normalized = mappings.map { mapping in
+            (
+                label: mapping.label.trimmingCharacters(in: .whitespacesAndNewlines),
+                selector: mapping.selector.trimmingCharacters(in: .whitespacesAndNewlines),
+                originalText: mapping.originalText.trimmingCharacters(in: .whitespacesAndNewlines),
+                placeholderKey: mapping.placeholderKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+
+        let uniqueSelectors = Set(normalized.map(\.selector).filter { !$0.isEmpty }).count
+        let filledLabelCount = normalized.filter { !$0.label.isEmpty }.count
+        let filledOriginalTextCount = normalized.filter { !$0.originalText.isEmpty }.count
+        let filledPlaceholderCount = normalized.filter { !$0.placeholderKey.isEmpty }.count
+
+        return (uniqueSelectors * 3) + (filledLabelCount * 2) + filledOriginalTextCount + filledPlaceholderCount
     }
 
     private func shouldReplaceFlowName(current: String, incoming: String) -> Bool {
@@ -907,7 +927,7 @@ class AppDataExportService {
             return !incomingIsGeneric
         }
 
-        return trimmedIncoming.count > trimmedCurrent.count
+        return false
     }
 
     private func isGenericFlowName(_ value: String) -> Bool {
