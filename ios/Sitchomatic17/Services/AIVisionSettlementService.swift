@@ -69,7 +69,7 @@ final class AIVisionSettlementService {
                     try? await Task.sleep(for: .milliseconds(remainingMs))
                     return nil
                 }
-                let first = await group.next() ?? nil
+                let first = (await group.next()).flatMap { $0 }
                 group.cancelAll()
                 return first
             }
