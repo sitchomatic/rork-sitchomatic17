@@ -129,8 +129,10 @@ final class UnifiedAIVisionService {
         }
 
         let parsed = parseGrokResponse(result, context: context)
-        // Treat parse failures (unknown with no reasoning) as nil so OCR fallback can run
-        if parsed.outcome == .unknown && parsed.reasoning.isEmpty {
+        // Treat parse failures as nil so OCR fallback can run
+        let normalizedReasoning = parsed.reasoning.trimmingCharacters(in: .whitespacesAndNewlines)
+        if parsed.outcome == .unknown &&
+            (normalizedReasoning.isEmpty || normalizedReasoning == "Failed to parse Grok response") {
             return nil
         }
         return parsed
