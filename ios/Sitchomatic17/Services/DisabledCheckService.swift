@@ -165,6 +165,18 @@ class DisabledCheckService {
                 }
             }
 
+            // AI Vision screenshot analysis as supplementary check
+            if let screenshot = await session.captureScreenshot() {
+                let visionResult = await UnifiedAIVisionService.shared.analyzeScreenshot(
+                    image: screenshot,
+                    context: VisionContext(phase: .disabledCheck, currentURL: await session.getCurrentURL())
+                )
+                if visionResult.outcome == .accountDisabledConfirmed && visionResult.confidence >= 60 {
+                    session.tearDown(wipeAll: true)
+                    return DisabledCheckResult(email: email, isDisabled: true, responseText: "AI Vision: \(visionResult.reasoning)")
+                }
+            }
+
             session.tearDown(wipeAll: true)
 
             if attempt < 3 && pageContent.trimmingCharacters(in: .whitespacesAndNewlines).count < 50 {
