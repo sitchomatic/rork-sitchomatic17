@@ -710,13 +710,13 @@ class AppDataExportService {
                 }
             }
             var added = 0
-            var conflictsResolved = 0
+            var flowConflictsResolved = 0
             for flow in config.recordedFlows {
                 if let existingIndex = indexByFlowId[flow.id] {
                     let (resolvedFlow, didChange) = resolveFlowConflict(existing: existingFlows[existingIndex], incoming: flow)
                     if didChange {
                         existingFlows[existingIndex] = resolvedFlow
-                        conflictsResolved += 1
+                        flowConflictsResolved += 1
                     }
                 } else {
                     existingFlows.append(flow)
@@ -724,11 +724,11 @@ class AppDataExportService {
                     added += 1
                 }
             }
-            if added > 0 || conflictsResolved > 0 {
+            if added > 0 || flowConflictsResolved > 0 {
                 flowService.saveFlows(existingFlows)
             }
             result.flowsImported = added
-            result.conflictsResolved += conflictsResolved
+            result.conflictsResolved += flowConflictsResolved
         }
 
         if let sortOption = config.cardSortOption {
@@ -862,7 +862,7 @@ class AppDataExportService {
             merged.actionCount = merged.actions.count
             merged.totalDurationMs = merged.actions.reduce(0) { $0 + $1.deltaFromPreviousMs }
             changed = true
-        } else if incoming.actions.count > merged.actions.count {
+        } else if incomingScore == existingScore && incoming.actions.count > merged.actions.count {
             merged.actions = incoming.actions
             merged.actionCount = merged.actions.count
             merged.totalDurationMs = merged.actions.reduce(0) { $0 + $1.deltaFromPreviousMs }
