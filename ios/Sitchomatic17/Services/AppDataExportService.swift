@@ -392,6 +392,7 @@ class AppDataExportService {
         var speedProfileImported: Bool = false
         var nordKeysImported: Bool = false
         var tempDisabledSettingsImported: Bool = false
+        var conflictsResolved: Int = 0
         var errors: [String] = []
 
         var summary: String {
@@ -415,6 +416,9 @@ class AppDataExportService {
             if speedProfileImported { parts.append("speed profile") }
             if nordKeysImported { parts.append("NordVPN keys") }
             if tempDisabledSettingsImported { parts.append("temp disabled settings") }
+            if conflictsResolved > 0 {
+                parts.append("\(conflictsResolved) \(conflictsResolved == 1 ? "conflict" : "conflicts") resolved")
+            }
             if parts.isEmpty { return "Nothing imported" }
             return "Imported: " + parts.joined(separator: ", ")
         }
@@ -580,12 +584,17 @@ class AppDataExportService {
         // Automation settings are now hardcoded — skip import (diagnostic export only)
 
         if !config.loginCredentials.isEmpty {
-            let existingCreds = LoginPersistenceService.shared.loadCredentials()
-            let existingIds = Set(existingCreds.map { "\($0.username):\($0.password)" })
-            var merged = existingCreds
+            var merged = LoginPersistenceService.shared.loadCredentials()
+            var indexByCredentialKey: [String: Int] = [:]
+            for (index, credential) in merged.enumerated() {
+                let key = credentialKey(username: credential.username, password: credential.password)
+                if indexByCredentialKey[key] == nil {
+                    indexByCredentialKey[key] = index
+                }
+            }
+            var credentialConflictsResolved = 0
             for ec in config.loginCredentials {
-                let key = "\(ec.username):\(ec.password)"
-                guard !existingIds.contains(key) else { continue }
+                let key = credentialKey(username: ec.username, password: ec.password)
                 let cred = LoginCredential(username: ec.username, password: ec.password, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
                 if let status = CredentialStatus(rawValue: ec.status) { cred.status = status }
                 cred.notes = ec.notes
@@ -594,20 +603,32 @@ class AppDataExportService {
                 cred.testResults = ec.testResults.map { r in
                     LoginTestResult(success: r.success, duration: r.duration, errorMessage: r.errorMessage, responseDetail: r.responseDetail, timestamp: Date(timeIntervalSince1970: r.timestamp))
                 }
-                merged.append(cred)
-                result.credentialsImported += 1
+                if let existingIndex = indexByCredentialKey[key] {
+                    if mergeCredential(existing: merged[existingIndex], incoming: cred) {
+                        credentialConflictsResolved += 1
+                    }
+                } else {
+                    merged.append(cred)
+                    indexByCredentialKey[key] = merged.count - 1
+                    result.credentialsImported += 1
+                }
             }
-            if result.credentialsImported > 0 {
+            if result.credentialsImported > 0 || credentialConflictsResolved > 0 {
                 LoginPersistenceService.shared.saveCredentials(merged)
             }
+            result.conflictsResolved += credentialConflictsResolved
         }
 
         if !config.ppsrCards.isEmpty {
-            let existingCards = PPSRPersistenceService.shared.loadCards()
-            let existingNums = Set(existingCards.map(\.number))
-            var merged = existingCards
+            var merged = PPSRPersistenceService.shared.loadCards()
+            var indexByCardNumber: [String: Int] = [:]
+            for (index, card) in merged.enumerated() {
+                if indexByCardNumber[card.number] == nil {
+                    indexByCardNumber[card.number] = index
+                }
+            }
+            var cardConflictsResolved = 0
             for ec in config.ppsrCards {
-                guard !existingNums.contains(ec.number) else { continue }
                 let card = PPSRCard(number: ec.number, expiryMonth: ec.expiryMonth, expiryYear: ec.expiryYear, cvv: ec.cvv, id: ec.id, addedAt: Date(timeIntervalSince1970: ec.addedAt))
                 if let status = CardStatus(rawValue: ec.status) { card.status = status }
                 card.testResults = ec.testResults.map { r in
@@ -616,12 +637,20 @@ class AppDataExportService {
                 if let bin = ec.binData {
                     card.binData = PPSRBINData(bin: bin.bin, scheme: bin.scheme, type: bin.type, category: bin.category, issuer: bin.issuer, country: bin.country, countryCode: bin.countryCode, isLoaded: bin.isLoaded)
                 }
-                merged.append(card)
-                result.cardsImported += 1
+                if let existingIndex = indexByCardNumber[ec.number] {
+                    if mergeCard(existing: merged[existingIndex], incoming: card) {
+                        cardConflictsResolved += 1
+                    }
+                } else {
+                    merged.append(card)
+                    indexByCardNumber[ec.number] = merged.count - 1
+                    result.cardsImported += 1
+                }
             }
-            if result.cardsImported > 0 {
+            if result.cardsImported > 0 || cardConflictsResolved > 0 {
                 PPSRPersistenceService.shared.saveCards(merged)
             }
+            result.conflictsResolved += cardConflictsResolved
         }
 
         if let loginSettings = config.loginAppSettings {
@@ -676,16 +705,32 @@ class AppDataExportService {
         if !config.recordedFlows.isEmpty {
             let flowService = FlowPersistenceService.shared
             var existingFlows = flowService.loadFlows()
-            let existingIds = Set(existingFlows.map(\.id))
-            var added = 0
-            for flow in config.recordedFlows where !existingIds.contains(flow.id) {
-                existingFlows.append(flow)
-                added += 1
+            var indexByFlowId: [String: Int] = [:]
+            for (index, flow) in existingFlows.enumerated() {
+                if indexByFlowId[flow.id] == nil {
+                    indexByFlowId[flow.id] = index
+                }
             }
-            if added > 0 {
+            var added = 0
+            var flowConflictsResolved = 0
+            for flow in config.recordedFlows {
+                if let existingIndex = indexByFlowId[flow.id] {
+                    let (resolvedFlow, didChange) = resolveFlowConflict(existing: existingFlows[existingIndex], incoming: flow)
+                    if didChange {
+                        existingFlows[existingIndex] = resolvedFlow
+                        flowConflictsResolved += 1
+                    }
+                } else {
+                    existingFlows.append(flow)
+                    indexByFlowId[flow.id] = existingFlows.count - 1
+                    added += 1
+                }
+            }
+            if added > 0 || flowConflictsResolved > 0 {
                 flowService.saveFlows(existingFlows)
             }
             result.flowsImported = added
+            result.conflictsResolved += flowConflictsResolved
         }
 
         if let sortOption = config.cardSortOption {
@@ -737,6 +782,344 @@ class AppDataExportService {
         }
         return "socks5://\(ep.host):\(ep.port)"
     }
+
+    private func mergeCredential(existing: LoginCredential, incoming: LoginCredential) -> Bool {
+        var changed = false
+
+        if shouldPromoteCredentialStatus(current: existing.status, incoming: incoming.status) {
+            existing.status = incoming.status
+            changed = true
+        }
+
+        let trimmedIncomingNotes = incoming.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedIncomingNotes.isEmpty {
+            let mergedNotes = mergeNotesLineWise(existing: existing.notes, incoming: trimmedIncomingNotes)
+            if mergedNotes != existing.notes {
+                existing.notes = mergedNotes
+                changed = true
+            }
+        }
+
+        let originalExistingPasswords = existing.assignedPasswords
+        let mergedPasswords = mergeUniqueStrings(originalExistingPasswords, incoming.assignedPasswords)
+        if mergedPasswords != existing.assignedPasswords {
+            existing.assignedPasswords = mergedPasswords
+            changed = true
+        }
+
+        let mergedNextPasswordIndex = resolveMergedPasswordIndex(
+            existingPasswords: originalExistingPasswords,
+            existingNextIndex: existing.nextPasswordIndex,
+            incomingPasswords: incoming.assignedPasswords,
+            incomingNextIndex: incoming.nextPasswordIndex,
+            mergedPasswords: mergedPasswords
+        )
+        if mergedNextPasswordIndex != existing.nextPasswordIndex {
+            existing.nextPasswordIndex = mergedNextPasswordIndex
+            changed = true
+        }
+
+        let mergedTestResults = mergeLoginTestResults(existing.testResults, incoming.testResults)
+        if loginResultKeys(mergedTestResults) != loginResultKeys(existing.testResults) {
+            existing.testResults = mergedTestResults
+            changed = true
+        }
+
+        return changed
+    }
+
+    private func mergeCard(existing: PPSRCard, incoming: PPSRCard) -> Bool {
+        var changed = false
+
+        if shouldPromoteCardStatus(current: existing.status, incoming: incoming.status) {
+            existing.status = incoming.status
+            changed = true
+        }
+
+        let mergedTestResults = mergeCardTestResults(existing.testResults, incoming.testResults)
+        if cardResultKeys(mergedTestResults) != cardResultKeys(existing.testResults) {
+            existing.testResults = mergedTestResults
+            changed = true
+        }
+
+        if existing.binData == nil, let incomingBin = incoming.binData {
+            existing.binData = incomingBin
+            changed = true
+        } else if let existingBin = existing.binData, let incomingBin = incoming.binData, !existingBin.isLoaded && incomingBin.isLoaded {
+            existing.binData = incomingBin
+            changed = true
+        }
+
+        return changed
+    }
+
+    private func resolveFlowConflict(existing: RecordedFlow, incoming: RecordedFlow) -> (RecordedFlow, Bool) {
+        var merged = existing
+        var changed = false
+
+        let incomingScore = flowCompletenessScore(incoming)
+        let existingScore = flowCompletenessScore(merged)
+        if incomingScore > existingScore {
+            merged.actions = incoming.actions
+            merged.actionCount = merged.actions.count
+            merged.totalDurationMs = merged.actions.reduce(0) { $0 + $1.deltaFromPreviousMs }
+            changed = true
+        } else if incomingScore == existingScore && incoming.actions.count > merged.actions.count {
+            merged.actions = incoming.actions
+            merged.actionCount = merged.actions.count
+            merged.totalDurationMs = merged.actions.reduce(0) { $0 + $1.deltaFromPreviousMs }
+            changed = true
+        }
+
+        if shouldReplaceFlowTextboxMappings(current: merged.textboxMappings, incoming: incoming.textboxMappings) {
+            merged.textboxMappings = incoming.textboxMappings
+            changed = true
+        }
+
+        if shouldReplaceFlowName(current: merged.name, incoming: incoming.name) {
+            merged.name = incoming.name
+            changed = true
+        }
+
+        return (merged, changed)
+    }
+
+    private func flowCompletenessScore(_ flow: RecordedFlow) -> Int {
+        let normalizedActionCount = flow.actions.count
+        let normalizedTotalDurationMs = flow.actions.reduce(0.0) { $0 + $1.deltaFromPreviousMs }
+        return (normalizedActionCount * flowActionWeight) + Int(normalizedTotalDurationMs.rounded())
+    }
+
+    private func shouldReplaceFlowTextboxMappings(
+        current: [RecordedFlow.TextboxMapping],
+        incoming: [RecordedFlow.TextboxMapping]
+    ) -> Bool {
+        guard !incoming.isEmpty else { return false }
+        if current.isEmpty { return true }
+        return flowTextboxMappingStrength(incoming) > flowTextboxMappingStrength(current)
+    }
+
+    private func flowTextboxMappingStrength(_ mappings: [RecordedFlow.TextboxMapping]) -> Int {
+        let normalized = mappings.map { mapping in
+            (
+                label: mapping.label.trimmingCharacters(in: .whitespacesAndNewlines),
+                selector: mapping.selector.trimmingCharacters(in: .whitespacesAndNewlines),
+                originalText: mapping.originalText.trimmingCharacters(in: .whitespacesAndNewlines),
+                placeholderKey: mapping.placeholderKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+
+        let uniqueSelectors = Set(normalized.map(\.selector).filter { !$0.isEmpty }).count
+        let filledLabelCount = normalized.filter { !$0.label.isEmpty }.count
+        let filledOriginalTextCount = normalized.filter { !$0.originalText.isEmpty }.count
+        let filledPlaceholderCount = normalized.filter { !$0.placeholderKey.isEmpty }.count
+
+        return (uniqueSelectors * 3) + (filledLabelCount * 2) + filledOriginalTextCount + filledPlaceholderCount
+    }
+
+    private func shouldReplaceFlowName(current: String, incoming: String) -> Bool {
+        let trimmedCurrent = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedIncoming = incoming.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedIncoming.isEmpty else { return false }
+        if trimmedCurrent.isEmpty { return true }
+
+        let currentIsGeneric = isGenericFlowName(trimmedCurrent)
+        let incomingIsGeneric = isGenericFlowName(trimmedIncoming)
+        if currentIsGeneric != incomingIsGeneric {
+            return !incomingIsGeneric
+        }
+
+        return false
+    }
+
+    private func isGenericFlowName(_ value: String) -> Bool {
+        let lowercased = value.lowercased()
+        if lowercased == "flow" || lowercased == "untitled flow" {
+            return true
+        }
+
+        let parts = lowercased.split(separator: " ")
+        return parts.count == 2 && parts[0] == "flow" && Int(parts[1]) != nil
+    }
+
+    private func shouldPromoteCredentialStatus(current: CredentialStatus, incoming: CredentialStatus) -> Bool {
+        credentialStatusPriority(incoming) > credentialStatusPriority(current)
+    }
+
+    private func credentialStatusPriority(_ status: CredentialStatus) -> Int {
+        switch status {
+        case .untested: return 0
+        case .testing: return 1
+        case .unsure: return 2
+        case .noAcc: return 3
+        case .tempDisabled: return 4
+        case .permDisabled: return 5
+        case .working: return 6
+        }
+    }
+
+    private func shouldPromoteCardStatus(current: CardStatus, incoming: CardStatus) -> Bool {
+        cardStatusPriority(incoming) > cardStatusPriority(current)
+    }
+
+    private func cardStatusPriority(_ status: CardStatus) -> Int {
+        switch status {
+        case .untested: return 0
+        case .testing: return 1
+        case .dead: return 2
+        case .working: return 3
+        }
+    }
+
+    private func mergeUniqueStrings(_ first: [String], _ second: [String]) -> [String] {
+        var seen = Set<String>()
+        var merged: [String] = []
+        for value in first + second where seen.insert(value).inserted {
+            merged.append(value)
+        }
+        return merged
+    }
+
+    private func resolveMergedPasswordIndex(
+        existingPasswords: [String],
+        existingNextIndex: Int,
+        incomingPasswords: [String],
+        incomingNextIndex: Int,
+        mergedPasswords: [String]
+    ) -> Int {
+        let existingClamped = clampedIndex(existingNextIndex, count: existingPasswords.count)
+        let incomingClamped = clampedIndex(incomingNextIndex, count: incomingPasswords.count)
+
+        let consumedFromExisting = Set(existingPasswords.prefix(existingClamped))
+        let consumedFromIncoming = Set(incomingPasswords.prefix(incomingClamped))
+        let consumedUnion = consumedFromExisting.union(consumedFromIncoming)
+
+        var resolved = 0
+        for password in mergedPasswords {
+            guard consumedUnion.contains(password) else { break }
+            resolved += 1
+        }
+        return resolved
+    }
+
+    private func clampedIndex(_ index: Int, count: Int) -> Int {
+        min(max(index, 0), count)
+    }
+
+    private func appendBoundedNote(existing: String, incoming: String) -> String {
+        let combined = "\(existing)\n\(incoming)"
+        guard combined.count > maxMergedNotesLength else { return combined }
+        return "…" + String(combined.suffix(maxMergedNotesLength - 1))
+    }
+
+    private func mergeNotesLineWise(existing: String, incoming: String) -> String {
+        let incomingLines = incoming.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !incomingLines.isEmpty else { return existing }
+
+        let existingTrimmed = existing.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existingLines = existingTrimmed.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var existingLineSet = Set(existingLines)
+
+        var newLines: [String] = []
+        for line in incomingLines where existingLineSet.insert(line).inserted {
+            newLines.append(line)
+        }
+        guard !newLines.isEmpty else { return existing }
+
+        if existingTrimmed.isEmpty {
+            let incomingBlock = newLines.joined(separator: "\n")
+            guard incomingBlock.count > maxMergedNotesLength else { return incomingBlock }
+            return "…" + String(incomingBlock.suffix(maxMergedNotesLength - 1))
+        }
+        return appendBoundedNote(existing: existingTrimmed, incoming: newLines.joined(separator: "\n"))
+    }
+
+    private func mergeLoginTestResults(_ first: [LoginTestResult], _ second: [LoginTestResult]) -> [LoginTestResult] {
+        var seen = Set<LoginResultKey>()
+        var merged: [LoginTestResult] = []
+        for result in first + second {
+            let key = LoginResultKey(
+                timestamp: result.timestamp.timeIntervalSince1970,
+                success: result.success,
+                duration: result.duration,
+                errorMessage: result.errorMessage ?? "",
+                responseDetail: result.responseDetail ?? ""
+            )
+            if seen.insert(key).inserted {
+                merged.append(result)
+            }
+        }
+        return merged.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    private func loginResultKeys(_ results: [LoginTestResult]) -> [LoginResultKey] {
+        results.map {
+            LoginResultKey(
+                timestamp: $0.timestamp.timeIntervalSince1970,
+                success: $0.success,
+                duration: $0.duration,
+                errorMessage: $0.errorMessage ?? "",
+                responseDetail: $0.responseDetail ?? ""
+            )
+        }
+    }
+
+    private func mergeCardTestResults(_ first: [PPSRTestResult], _ second: [PPSRTestResult]) -> [PPSRTestResult] {
+        var seen = Set<CardResultKey>()
+        var merged: [PPSRTestResult] = []
+        for result in first + second {
+            let key = CardResultKey(
+                timestamp: result.timestamp.timeIntervalSince1970,
+                success: result.success,
+                vin: result.vin,
+                duration: result.duration,
+                errorMessage: result.errorMessage ?? ""
+            )
+            if seen.insert(key).inserted {
+                merged.append(result)
+            }
+        }
+        return merged.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    private func cardResultKeys(_ results: [PPSRTestResult]) -> [CardResultKey] {
+        results.map {
+            CardResultKey(
+                timestamp: $0.timestamp.timeIntervalSince1970,
+                success: $0.success,
+                vin: $0.vin,
+                duration: $0.duration,
+                errorMessage: $0.errorMessage ?? ""
+            )
+        }
+    }
+
+    private func credentialKey(username: String, password: String) -> String {
+        "\(username):\(password)"
+    }
+
+    nonisolated private struct LoginResultKey: Hashable {
+        let timestamp: TimeInterval
+        let success: Bool
+        let duration: TimeInterval
+        let errorMessage: String
+        let responseDetail: String
+    }
+
+    nonisolated private struct CardResultKey: Hashable {
+        let timestamp: TimeInterval
+        let success: Bool
+        let vin: String
+        let duration: TimeInterval
+        let errorMessage: String
+    }
+
+    private let flowActionWeight = 1000
+    private let maxMergedNotesLength = 2000
 
     func exportComprehensiveState() -> String {
         var sections: [String] = []
