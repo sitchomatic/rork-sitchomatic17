@@ -416,7 +416,9 @@ class AppDataExportService {
             if speedProfileImported { parts.append("speed profile") }
             if nordKeysImported { parts.append("NordVPN keys") }
             if tempDisabledSettingsImported { parts.append("temp disabled settings") }
-            if conflictsResolved > 0 { parts.append("\(conflictsResolved) conflicts resolved") }
+            if conflictsResolved > 0 {
+                parts.append("\(conflictsResolved) \(conflictsResolved == 1 ? "conflict" : "conflicts") resolved")
+            }
             if parts.isEmpty { return "Nothing imported" }
             return "Imported: " + parts.joined(separator: ", ")
         }
