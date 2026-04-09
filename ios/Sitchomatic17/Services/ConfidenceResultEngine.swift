@@ -30,7 +30,6 @@ class ConfidenceResultEngine {
         currentURL: String,
         preLoginURL: String,
         pageTitle: String,
-        welcomeTextFound: Bool,
         redirectedToHomepage: Bool,
         navigationDetected: Bool,
         contentChanged: Bool,
@@ -47,7 +46,6 @@ class ConfidenceResultEngine {
         contributions.append(urlSignal)
 
         let domSignal = evaluateDOMMarkers(
-            welcomeTextFound: welcomeTextFound,
             redirectedToHomepage: redirectedToHomepage,
             navigationDetected: navigationDetected,
             contentChanged: contentChanged
@@ -266,17 +264,16 @@ class ConfidenceResultEngine {
         return SignalContribution(source: "URL_AMBIGUOUS", weight: weight, rawScore: 0.1, weightedScore: weight * 0.1, detail: "url ambiguous")
     }
 
-    private func evaluateDOMMarkers(welcomeTextFound: Bool, redirectedToHomepage: Bool, navigationDetected: Bool, contentChanged: Bool) -> SignalContribution {
-        let weight = 0.15  // Reduced: OCR is primary signal per Blueprint
+    private func evaluateDOMMarkers(redirectedToHomepage: Bool, navigationDetected: Bool, contentChanged: Bool) -> SignalContribution {
+        let weight = 0.15
         var raw = 0.0
 
         if redirectedToHomepage { raw += 0.5 }
-        if welcomeTextFound { raw += 0.3 }
-        if navigationDetected { raw += 0.1 }
-        if contentChanged { raw += 0.1 }
+        if navigationDetected { raw += 0.2 }
+        if contentChanged { raw += 0.3 }
         raw = min(1.0, raw)
 
-        let detail = "welcome=\(welcomeTextFound) redirect=\(redirectedToHomepage) nav=\(navigationDetected) changed=\(contentChanged)"
+        let detail = "redirect=\(redirectedToHomepage) nav=\(navigationDetected) changed=\(contentChanged)"
 
         if raw >= 0.5 {
             return SignalContribution(source: "SUCCESS_DOM", weight: weight, rawScore: raw, weightedScore: weight * raw, detail: "success \(detail)")
@@ -366,7 +363,7 @@ class ConfidenceResultEngine {
         }
 
         // Secondary Logic — Success
-        let successOCR = ["my account", "balance", "deposit", "welcome", "logout"]
+        let successOCR = ["my account", "balance", "deposit", "logout"]
         for term in successOCR {
             if allText.contains(term) {
                 return SignalContribution(source: "SUCCESS_OCR", weight: weight, rawScore: 0.9, weightedScore: weight * 0.9, detail: "success OCR '\(term)'")

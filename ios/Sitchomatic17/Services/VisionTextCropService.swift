@@ -64,7 +64,7 @@ class VisionTextCropService {
         "has been disabled",
         "temporarily disabled",
         // Secondary Logic — Success
-        "my account", "balance", "deposit", "welcome", "dashboard",
+        "my account", "balance", "deposit", "dashboard",
         "logout", "log out", "successfully", "logged in",
         // Secondary Logic — No Account
         "incorrect", "not find", "no account", "invalid",
@@ -84,7 +84,6 @@ class VisionTextCropService {
         ("my account", .success),
         ("balance", .success),
         ("deposit", .success),
-        ("welcome", .success),
         ("dashboard", .success),
         ("logout", .success),
         // Secondary Logic — No Account

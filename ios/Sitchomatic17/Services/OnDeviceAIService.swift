@@ -388,7 +388,7 @@ final class OnDeviceAIService {
 
     private func heuristicLoginAnalysis(pageContent: String) -> AIAnalysisLoginResult? {
         let lower = pageContent.lowercased()
-        let success = lower.contains("lobby") || lower.contains("dashboard") || lower.contains("balance") || lower.contains("welcome back")
+        let success = lower.contains("lobby") || lower.contains("dashboard") || lower.contains("balance")
         let disabled = lower.contains("has been disabled") || lower.contains("temporarily disabled") || lower.contains("suspended") || lower.contains("banned")
         let hasError = lower.contains("incorrect") || lower.contains("invalid") || lower.contains("error")
 

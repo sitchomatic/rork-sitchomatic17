@@ -255,7 +255,7 @@ class AIConfidenceAnalyzerService {
             "account has been disabled", "account has been suspended",
             "temporarily locked", "too many attempts", "try again later",
             "balance", "wallet", "my account", "logout", "dashboard",
-            "welcome back", "successfully logged", "account not found",
+            "successfully logged", "account not found",
             "permanently banned", "self-excluded", "account is closed",
             "temporarily disabled", "login failed", "authentication failed",
             "sms verification", "verification code", "phone verification"
