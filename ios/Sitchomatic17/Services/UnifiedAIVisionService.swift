@@ -128,7 +128,12 @@ final class UnifiedAIVisionService {
             return nil
         }
 
-        return parseGrokResponse(result, context: context)
+        let parsed = parseGrokResponse(result, context: context)
+        // Treat parse failures (unknown with no reasoning) as nil so OCR fallback can run
+        if parsed.outcome == .unknown && parsed.reasoning.isEmpty {
+            return nil
+        }
+        return parsed
     }
 
     private func buildPrompt(for context: VisionContext) -> String {
@@ -259,13 +264,27 @@ final class UnifiedAIVisionService {
 
         return VisionOutcome(
             outcome: outcomeType,
-            confidence: dict["confidence"] as? Int ?? 50,
+            confidence: Self.parseConfidence(dict["confidence"]),
             reasoning: dict["reasoning"] as? String ?? "",
             isPageSettled: dict["isPageSettled"] as? Bool ?? false,
             isPageBlank: dict["isPageBlank"] as? Bool ?? false,
             errorText: dict["errorText"] as? String ?? "",
             rawResponse: raw
         )
+    }
+
+    /// Parse confidence from Grok JSON — accepts Int, Double, or numeric String, clamped to 0–100.
+    private static func parseConfidence(_ value: Any?) -> Int {
+        if let intVal = value as? Int {
+            return min(max(intVal, 0), 100)
+        }
+        if let doubleVal = value as? Double {
+            return min(max(Int(doubleVal), 0), 100)
+        }
+        if let strVal = value as? String, let parsed = Double(strVal) {
+            return min(max(Int(parsed), 0), 100)
+        }
+        return 50
     }
 
     // MARK: - On-Device OCR Fallback

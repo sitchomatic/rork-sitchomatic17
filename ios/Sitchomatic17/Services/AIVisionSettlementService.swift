@@ -63,7 +63,10 @@ final class AIVisionSettlementService {
             logger.log("AIVisionSettlement: screenshot \(screenshotCount) at \(interval)ms — settled=\(result.isPageSettled), outcome=\(result.outcome.rawValue), confidence=\(result.confidence)", category: .automation, level: .info)
 
             // If page is settled with a definitive outcome, return immediately
-            if result.isPageSettled && result.outcome != .pageLoading && result.confidence >= 50 {
+            if result.isPageSettled
+                && result.outcome != .pageLoading
+                && result.outcome != .unknown
+                && result.confidence >= 50 {
                 let totalMs = Int(Date().timeIntervalSince(startTime) * 1000)
                 return AIVisionSettlementResult(
                     settled: true,
