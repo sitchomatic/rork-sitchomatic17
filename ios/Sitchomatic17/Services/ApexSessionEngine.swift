@@ -984,7 +984,7 @@ class LoginSiteWebSession: NSObject {
         return (false, "OCR: no login button text found in \(observations.count) observations")
     }
 
-    func rapidPostSubmitPoll(timeout: TimeInterval, originalURL: String) async -> (redirectedToHomepage: Bool, navigationDetected: Bool, errorBannerDetected: Bool, smsNotificationDetected: Bool, finalPageContent: String, finalURL: String) {
+    func rapidPostSubmitPoll(timeout: TimeInterval, originalURL: String) async -> (redirectedToHomepage: Bool, navigationDetected: Bool, errorBannerDetected: Bool, smsNotificationDetected: Bool, successDetectedInDOM: Bool, finalPageContent: String, finalURL: String) {
         let start = Date()
         var redirectedToHomepage = false
         var navigationDetected = false
@@ -1037,7 +1037,7 @@ class LoginSiteWebSession: NSObject {
             }
             try? await Task.sleep(for: .milliseconds(200))
         }
-        return (redirectedToHomepage: redirectedToHomepage, navigationDetected: navigationDetected, errorBannerDetected: errorBannerDetected, smsNotificationDetected: smsNotificationDetected, finalPageContent: finalPageContent, finalURL: finalURL)
+        return (redirectedToHomepage: redirectedToHomepage, navigationDetected: navigationDetected, errorBannerDetected: errorBannerDetected, smsNotificationDetected: smsNotificationDetected, successDetectedInDOM: successDetected, finalPageContent: finalPageContent, finalURL: finalURL)
     }
 
     func captureScreenshotFast() async -> UIImage? {

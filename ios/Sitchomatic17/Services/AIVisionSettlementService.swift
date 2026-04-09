@@ -57,7 +57,27 @@ final class AIVisionSettlementService {
                 currentURL: context.currentURL
             )
 
-            let result = await aiVision.analyzeScreenshot(image: screenshot, context: settlementContext)
+            // Apply per-iteration timeout based on remaining budget
+            let remainingMs = maxTimeoutMs - Int(Date().timeIntervalSince(startTime) * 1000)
+            guard remainingMs > 0 else { break }
+
+            let analysisResult: VisionOutcome? = await withTaskGroup(of: VisionOutcome?.self) { group in
+                group.addTask {
+                    await self.aiVision.analyzeScreenshot(image: screenshot, context: settlementContext)
+                }
+                group.addTask {
+                    try? await Task.sleep(for: .milliseconds(remainingMs))
+                    return nil
+                }
+                let first = await group.next() ?? nil
+                group.cancelAll()
+                return first
+            }
+
+            guard let result = analysisResult else {
+                logger.log("AIVisionSettlement: analysis timed out at interval \(interval)ms (budget exhausted)", category: .automation, level: .warning)
+                break
+            }
             lastOutcome = result
 
             logger.log("AIVisionSettlement: screenshot \(screenshotCount) at \(interval)ms — settled=\(result.isPageSettled), outcome=\(result.outcome.rawValue), confidence=\(result.confidence)", category: .automation, level: .info)

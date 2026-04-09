@@ -1038,7 +1038,7 @@ class LoginAutomationEngine {
             let pollResult = await session.rapidPostSubmitPoll(timeout: responseTimeout, originalURL: preSubmitURL)
             timedScreenshotTask?.cancel()
             let pollMs = logger.stopTimer(key: "\(sessionId)_poll_\(cycle)")
-            logger.log("Rapid poll complete: redirect=\(pollResult.redirectedToHomepage) nav=\(pollResult.navigationDetected) banner=\(pollResult.errorBannerDetected) sms=\(pollResult.smsNotificationDetected)", category: .automation, level: .debug, sessionId: sessionId, durationMs: pollMs)
+            logger.log("Rapid poll complete: redirect=\(pollResult.redirectedToHomepage) nav=\(pollResult.navigationDetected) banner=\(pollResult.errorBannerDetected) sms=\(pollResult.smsNotificationDetected) successDOM=\(pollResult.successDetectedInDOM)", category: .automation, level: .debug, sessionId: sessionId, durationMs: pollMs)
 
             advanceTo(.evaluatingResult, attempt: attempt, message: "Cycle \(cycle)/\(maxSubmitCycles) — evaluating response...")
 
