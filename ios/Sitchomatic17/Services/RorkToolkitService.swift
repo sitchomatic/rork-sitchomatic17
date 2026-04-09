@@ -208,6 +208,42 @@ final class RorkToolkitService {
         return await analyzeScreenshotWithVision(image: image, prompt: prompt)
     }
 
+    // MARK: Unified Vision Analysis
+
+    func analyzeWithUnifiedVision(image: UIImage, prompt: String) async -> String? {
+        guard let key = apiKey, !key.isEmpty else {
+            logger.log("GrokUnifiedVision: no API key", category: .automation, level: .error)
+            return nil
+        }
+
+        guard let base64 = encodeImageForVision(image) else {
+            logger.log("GrokUnifiedVision: failed to encode image", category: .automation, level: .error)
+            return nil
+        }
+
+        let body: [String: Any] = [
+            "model": GrokModel.vision.rawValue,
+            "messages": [
+                [
+                    "role": "user",
+                    "content": [
+                        ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64)"]],
+                        ["type": "text", "text": prompt],
+                    ],
+                ]
+            ],
+            "temperature": 0.1,
+            "response_format": ["type": "json_object"],
+        ]
+
+        return await callWithRetry(
+            endpoint: "/v1/chat/completions",
+            body: body,
+            key: key,
+            model: GrokModel.vision.rawValue
+        )
+    }
+
     // MARK: API Test
 
     func testConnection() async -> (success: Bool, latencyMs: Int, model: String) {
