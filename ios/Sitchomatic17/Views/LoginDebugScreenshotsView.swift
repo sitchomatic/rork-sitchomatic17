@@ -1363,7 +1363,7 @@ struct LoginScreenshotCorrectionSheet: View {
         if note.contains("has been disabled") { reasons.append("Detected 'has been disabled' → Perm Disabled") }
         if note.contains("temporarily disabled") { reasons.append("Detected 'temporarily disabled' → Temp Disabled") }
         if note.contains("incorrect") { reasons.append("Detected 'incorrect' → No Account") }
-        if note.contains("welcome") || note.contains("lobby") || note.contains("dashboard") { reasons.append("Detected success indicators → Success") }
+        if note.contains("lobby") || note.contains("dashboard") || note.contains("balance") { reasons.append("Detected success indicators → Success") }
         if note.contains("green banner") { reasons.append("Green banner detected → Success") }
         if note.contains("no response") || note.contains("timeout") { reasons.append("No response / timeout → Unsure") }
         if reasons.isEmpty { reasons.append("AI: \(screenshot.autoDetectedResult.displayLabel) (based on page content analysis)") }

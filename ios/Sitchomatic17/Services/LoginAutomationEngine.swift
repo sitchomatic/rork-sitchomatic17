@@ -379,7 +379,6 @@ class LoginAutomationEngine {
             currentURL: currentURL,
             preLoginURL: targetURL.absoluteString,
             pageTitle: "",
-            welcomeTextFound: false,
             redirectedToHomepage: currentURL.lowercased() != targetURL.absoluteString.lowercased() && !currentURL.lowercased().contains("/login"),
             navigationDetected: currentURL != targetURL.absoluteString,
             contentChanged: !pageContent.isEmpty,
@@ -1036,10 +1035,10 @@ class LoginAutomationEngine {
             attempt.logs.append(PPSRLogEntry(message: "Cycle \(cycle): waiting up to \(Int(responseTimeout))s for response\(cycle == 1 ? " (extended first-press timeout)" : "")...", level: .info))
 
             logger.startTimer(key: "\(sessionId)_poll_\(cycle)")
-            let pollResult = await session.rapidWelcomePoll(timeout: responseTimeout, originalURL: preSubmitURL)
+            let pollResult = await session.rapidPostSubmitPoll(timeout: responseTimeout, originalURL: preSubmitURL)
             timedScreenshotTask?.cancel()
             let pollMs = logger.stopTimer(key: "\(sessionId)_poll_\(cycle)")
-            logger.log("Rapid poll complete: welcome=\(pollResult.welcomeTextFound) redirect=\(pollResult.redirectedToHomepage) nav=\(pollResult.navigationDetected) banner=\(pollResult.errorBannerDetected) sms=\(pollResult.smsNotificationDetected)", category: .automation, level: .debug, sessionId: sessionId, durationMs: pollMs)
+            logger.log("Rapid poll complete: redirect=\(pollResult.redirectedToHomepage) nav=\(pollResult.navigationDetected) banner=\(pollResult.errorBannerDetected) sms=\(pollResult.smsNotificationDetected) successDOM=\(pollResult.successDetectedInDOM)", category: .automation, level: .debug, sessionId: sessionId, durationMs: pollMs)
 
             advanceTo(.evaluatingResult, attempt: attempt, message: "Cycle \(cycle)/\(maxSubmitCycles) — evaluating response...")
 
@@ -1100,12 +1099,11 @@ class LoginAutomationEngine {
                 attempt.logs.append(PPSRLogEntry(message: "BLANK PAGE RECOVERED on cycle \(cycle) via \(postSubmitRecovery.stepUsed?.rawValue ?? "unknown")", level: .success))
             }
 
-            let welcomeTextFound = pollResult.welcomeTextFound
-            let welcomeContext: String? = pollResult.welcomeTextFound ? String(pollResult.finalPageContent.prefix(200)) : nil
+            let redirected = pollResult.redirectedToHomepage
 
             attempt.logs.append(PPSRLogEntry(
-                message: "Welcome! rapid poll: \(welcomeTextFound ? "FOUND — \(welcomeContext ?? "")" : "NOT FOUND")",
-                level: welcomeTextFound ? .success : .info
+                message: "Rapid poll: redirect=\(redirected ? "YES" : "NO")",
+                level: redirected ? .success : .info
             ))
             attempt.logs.append(PPSRLogEntry(
                 message: "Redirect check: \(pollResult.redirectedToHomepage ? "REDIRECTED to homepage" : "still on login page") | URL: \(currentURL)",
@@ -1142,7 +1140,6 @@ class LoginAutomationEngine {
                 currentURL: currentURL,
                 preLoginURL: preLoginURL,
                 pageTitle: await session.getPageTitle(),
-                welcomeTextFound: welcomeTextFound,
                 redirectedToHomepage: pollResult.redirectedToHomepage,
                 navigationDetected: pollResult.navigationDetected,
                 contentChanged: pollResult.navigationDetected
@@ -1165,7 +1162,7 @@ class LoginAutomationEngine {
             default: autoResult = .unknown
             }
 
-            await captureAlwaysScreenshot(session: session, attempt: attempt, cycle: cycle, maxCycles: maxSubmitCycles, welcomeTextFound: welcomeTextFound, redirected: pollResult.redirectedToHomepage, evaluationReason: evaluation.reason, currentURL: currentURL, autoResult: autoResult)
+            await captureAlwaysScreenshot(session: session, attempt: attempt, cycle: cycle, maxCycles: maxSubmitCycles, redirected: pollResult.redirectedToHomepage, evaluationReason: evaluation.reason, currentURL: currentURL, autoResult: autoResult)
 
             attempt.logs.append(PPSRLogEntry(
                 message: "Cycle \(cycle) evaluation: \(evaluation.outcome) (score: \(evaluation.score), signals: \(evaluation.signals.count)) — \(evaluation.reason)",
@@ -1273,7 +1270,6 @@ class LoginAutomationEngine {
         currentURL: String,
         preLoginURL: String,
         pageTitle: String,
-        welcomeTextFound: Bool,
         redirectedToHomepage: Bool,
         navigationDetected: Bool,
         contentChanged: Bool
@@ -1376,7 +1372,7 @@ class LoginAutomationEngine {
         return attempt.screenshotIds.count < limit
     }
 
-    private func captureAlwaysScreenshot(session: LoginSiteWebSession, attempt: LoginAttempt, cycle: Int, maxCycles: Int, welcomeTextFound: Bool, redirected: Bool, evaluationReason: String, currentURL: String, autoResult: PPSRDebugScreenshot.AutoDetectedResult) async {
+    private func captureAlwaysScreenshot(session: LoginSiteWebSession, attempt: LoginAttempt, cycle: Int, maxCycles: Int, redirected: Bool, evaluationReason: String, currentURL: String, autoResult: PPSRDebugScreenshot.AutoDetectedResult) async {
         guard shouldCaptureScreenshot(attempt: attempt) else {
             logger.log("Screenshot skipped (limit=\(automationSettings.screenshotsPerAttempt.limit), captured=\(attempt.screenshotIds.count))", category: .screenshot, level: .trace)
             return
@@ -1420,7 +1416,7 @@ class LoginAutomationEngine {
             vin: "",
             email: attempt.credential.username,
             image: compressed,
-            note: "Cycle \(cycle)/\(maxCycles) | Welcome!: \(welcomeTextFound ? "YES" : "NO") | Redirect: \(redirected ? "YES" : "NO") | \(evaluationReason) | URL: \(currentURL)\(noteExtra)",
+            note: "Cycle \(cycle)/\(maxCycles) | Redirect: \(redirected ? "YES" : "NO") | \(evaluationReason) | URL: \(currentURL)\(noteExtra)",
             autoDetectedResult: finalAutoResult
         )
         attempt.screenshotIds.append(screenshot.id)
@@ -1607,7 +1603,7 @@ class LoginAutomationEngine {
         }
     }
 
-    private func visionVerifyPostLogin(session: LoginSiteWebSession, sessionId: String) async -> (welcomeFound: Bool, errorFound: Bool, context: String?) {
+    private func visionVerifyPostLogin(session: LoginSiteWebSession, sessionId: String) async -> (successFound: Bool, errorFound: Bool, context: String?) {
         guard let screenshot = await session.captureScreenshot() else {
             return (false, false, nil)
         }

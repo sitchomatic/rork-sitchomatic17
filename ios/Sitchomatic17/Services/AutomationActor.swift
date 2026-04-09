@@ -168,7 +168,7 @@ class AutomationActor {
 
         if let postScreenshot = await session.captureScreenshot() {
             let indicators = await visionML.detectSuccessIndicators(in: postScreenshot)
-            if indicators.welcomeFound {
+            if indicators.successFound {
                 logger.log("AutomationActor: vision login SUCCESS — \(indicators.context ?? "")", category: .automation, level: .success, sessionId: sessionId)
                 completedTasks += 1
                 return .success

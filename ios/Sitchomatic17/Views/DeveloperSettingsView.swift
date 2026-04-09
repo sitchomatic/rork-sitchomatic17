@@ -1098,6 +1098,8 @@ struct DeveloperSettingsView: View {
     }
 
     @ViewBuilder private var settlementContent: some View {
+        Text("⚠️ Legacy — AI Vision Settlement now handles detection. These settings apply to the fallback JS-based settlement gate only.")
+            .font(.caption2).foregroundStyle(.secondary).padding(.bottom, 4)
         devToggle("Settlement Gate Enabled", $settings.v42SettlementGateEnabled)
         devInt("Settlement Max Timeout (ms)", $settings.v42SettlementMaxTimeoutMs)
             .disabled(!settings.v42SettlementGateEnabled)

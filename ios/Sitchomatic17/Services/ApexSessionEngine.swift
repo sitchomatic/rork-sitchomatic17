@@ -984,30 +984,30 @@ class LoginSiteWebSession: NSObject {
         return (false, "OCR: no login button text found in \(observations.count) observations")
     }
 
-    func rapidWelcomePoll(timeout: TimeInterval, originalURL: String) async -> (welcomeTextFound: Bool, redirectedToHomepage: Bool, navigationDetected: Bool, errorBannerDetected: Bool, smsNotificationDetected: Bool, finalPageContent: String, finalURL: String) {
+    func rapidPostSubmitPoll(timeout: TimeInterval, originalURL: String) async -> (redirectedToHomepage: Bool, navigationDetected: Bool, errorBannerDetected: Bool, smsNotificationDetected: Bool, successDetectedInDOM: Bool, finalPageContent: String, finalURL: String) {
         let start = Date()
-        var welcomeTextFound = false
         var redirectedToHomepage = false
         var navigationDetected = false
         var errorBannerDetected = false
         var smsNotificationDetected = false
         var finalPageContent = ""
         var finalURL = ""
+        var successDetected = false
 
         let pollJS = """
         (function() {
             var body = (document.body ? document.body.innerText : '').substring(0, 3000).toLowerCase();
             var url = window.location.href;
-            var welcomeTerms = ['my account','logged in','lobby','your balance','my wallet','logout','log out'];
+            var successTerms = ['my account','logged in','lobby','your balance','my wallet','logout','log out','dashboard','deposit','balance'];
             var errorTerms = ['invalid','incorrect','wrong password','failed','error','try again','denied','expired'];
             var smsTerms = ['verification code','sms','two-factor','2fa','mfa','one-time','otp','authenticator'];
-            var hasWelcome = false;
-            for (var i = 0; i < welcomeTerms.length; i++) { if (body.indexOf(welcomeTerms[i]) !== -1) { hasWelcome = true; break; } }
+            var hasSuccess = false;
+            for (var i = 0; i < successTerms.length; i++) { if (body.indexOf(successTerms[i]) !== -1) { hasSuccess = true; break; } }
             var hasError = false;
             for (var j = 0; j < errorTerms.length; j++) { if (body.indexOf(errorTerms[j]) !== -1) { hasError = true; break; } }
             var hasSMS = false;
             for (var k = 0; k < smsTerms.length; k++) { if (body.indexOf(smsTerms[k]) !== -1) { hasSMS = true; break; } }
-            return JSON.stringify({welcome: hasWelcome, error: hasError, sms: hasSMS, url: url, content: body.substring(0, 1500)});
+            return JSON.stringify({success: hasSuccess, error: hasError, sms: hasSMS, url: url, content: body.substring(0, 1500)});
         })();
         """
 
@@ -1021,7 +1021,7 @@ class LoginSiteWebSession: NSObject {
             let currentURL = json["url"] as? String ?? ""
             finalURL = currentURL
             finalPageContent = json["content"] as? String ?? ""
-            welcomeTextFound = json["welcome"] as? Bool ?? false
+            successDetected = json["success"] as? Bool ?? false
             errorBannerDetected = json["error"] as? Bool ?? false
             smsNotificationDetected = json["sms"] as? Bool ?? false
             navigationDetected = !currentURL.isEmpty && currentURL != originalURL
@@ -1032,12 +1032,12 @@ class LoginSiteWebSession: NSObject {
                 let curPath = URL(string: currentURL)?.path ?? ""
                 redirectedToHomepage = curPath != origPath && (curPath == "/" || curPath.contains("home") || curPath.contains("dashboard") || curPath.contains("account"))
             }
-            if welcomeTextFound || redirectedToHomepage || navigationDetected || errorBannerDetected || smsNotificationDetected {
+            if successDetected || redirectedToHomepage || navigationDetected || errorBannerDetected || smsNotificationDetected {
                 break
             }
             try? await Task.sleep(for: .milliseconds(200))
         }
-        return (welcomeTextFound: welcomeTextFound, redirectedToHomepage: redirectedToHomepage, navigationDetected: navigationDetected, errorBannerDetected: errorBannerDetected, smsNotificationDetected: smsNotificationDetected, finalPageContent: finalPageContent, finalURL: finalURL)
+        return (redirectedToHomepage: redirectedToHomepage, navigationDetected: navigationDetected, errorBannerDetected: errorBannerDetected, smsNotificationDetected: smsNotificationDetected, successDetectedInDOM: successDetected, finalPageContent: finalPageContent, finalURL: finalURL)
     }
 
     func captureScreenshotFast() async -> UIImage? {

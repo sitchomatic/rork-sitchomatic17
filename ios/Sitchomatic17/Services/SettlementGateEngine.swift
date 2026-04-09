@@ -93,7 +93,7 @@ class SettlementGateEngine {
     private let checkURLJS = "(function(){try{return window.location.href||'';}catch(e){return'';}})()"
 
     private let badRedirectPatterns = ["captcha", "challenge", "verify", "/reset", "error", "403", "blocked", "maintenance", "unavailable", "recaptcha", "hcaptcha", "cloudflare", "access-denied", "forbidden"]
-    private let goodRedirectPatterns = ["lobby", "/home", "dashboard", "account", "my-", "welcome", "deposit", "recommended", "last-played", "profile", "balance"]
+    private let goodRedirectPatterns = ["lobby", "/home", "dashboard", "account", "my-", "deposit", "recommended", "last-played", "profile", "balance"]
 
     private nonisolated func classifyRedirectURL(_ url: String) -> RedirectClassification {
         let lower = url.lowercased()

@@ -8,17 +8,6 @@ nonisolated struct GreenBannerDetector: Sendable {
         let greenRowPercentage: Double
     }
 
-    static func detectWelcomeText(in pageContent: String) -> (found: Bool, exact: String?) {
-        let searchTarget = "Welcome!"
-        guard let range = pageContent.range(of: searchTarget) else {
-            return (false, nil)
-        }
-        let start = pageContent.index(range.lowerBound, offsetBy: -20, limitedBy: pageContent.startIndex) ?? pageContent.startIndex
-        let end = pageContent.index(range.upperBound, offsetBy: 20, limitedBy: pageContent.endIndex) ?? pageContent.endIndex
-        let context = String(pageContent[start..<end]).replacingOccurrences(of: "\n", with: " ")
-        return (true, context)
-    }
-
     static func detectWhiteBanner(in image: UIImage) -> DetectionResult {
         guard let cgImage = image.cgImage else { return DetectionResult(detected: false, confidence: 0, bannerRect: nil, greenRowPercentage: 0) }
 

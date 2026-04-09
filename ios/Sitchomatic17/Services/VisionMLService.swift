@@ -287,35 +287,28 @@ class VisionMLService {
         case none
     }
 
-    func detectSuccessIndicators(in image: UIImage) async -> (welcomeFound: Bool, errorFound: Bool, context: String?) {
-        let allText = await recognizeAllText(in: image)
+    func detectSuccessIndicators(in image: UIImage) async -> (successFound: Bool, errorFound: Bool, context: String?) {
+        // Delegate to UnifiedAIVisionService for all detection
+        let result = await UnifiedAIVisionService.shared.analyzeScreenshot(
+            image: image,
+            context: VisionContext(phase: .login)
+        )
 
-        let successTerms = ["dashboard", "my account", "balance", "deposit", "logout", "log out"]
-        let errorTerms = ["incorrect", "invalid", "error", "failed", "wrong", "disabled", "blocked", "suspended", "locked"]
-
-        var welcomeFound = false
-        var errorFound = false
-        var context: String?
-
-        for element in allText {
-            let lower = element.text.lowercased()
-            for term in successTerms {
-                if lower.contains(term) {
-                    welcomeFound = true
-                    context = element.text
-                    break
-                }
-            }
-            for term in errorTerms {
-                if lower.contains(term) {
-                    errorFound = true
-                    if context == nil { context = element.text }
-                    break
-                }
-            }
+        let successFound: Bool
+        switch result.outcome {
+        case .success: successFound = true
+        default: successFound = false
         }
 
-        return (welcomeFound, errorFound, context)
+        let errorFound: Bool
+        switch result.outcome {
+        case .incorrectPassword, .noAccount, .permDisabled, .tempDisabled, .errorBanner:
+            errorFound = true
+        default:
+            errorFound = false
+        }
+
+        return (successFound, errorFound, result.reasoning.isEmpty ? nil : result.reasoning)
     }
 
     func detectDisabledAccount(in image: UIImage) async -> (type: DisabledDetectionType, matchedText: String?, allOCRText: String) {
