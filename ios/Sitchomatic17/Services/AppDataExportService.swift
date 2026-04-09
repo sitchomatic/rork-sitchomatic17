@@ -898,7 +898,26 @@ class AppDataExportService {
     private func shouldReplaceFlowName(current: String, incoming: String) -> Bool {
         let trimmedCurrent = current.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedIncoming = incoming.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmedIncoming.isEmpty && (trimmedCurrent.isEmpty || trimmedIncoming.count > trimmedCurrent.count)
+        guard !trimmedIncoming.isEmpty else { return false }
+        if trimmedCurrent.isEmpty { return true }
+
+        let currentIsGeneric = isGenericFlowName(trimmedCurrent)
+        let incomingIsGeneric = isGenericFlowName(trimmedIncoming)
+        if currentIsGeneric != incomingIsGeneric {
+            return !incomingIsGeneric
+        }
+
+        return trimmedIncoming.count > trimmedCurrent.count
+    }
+
+    private func isGenericFlowName(_ value: String) -> Bool {
+        let lowercased = value.lowercased()
+        if lowercased == "flow" || lowercased == "untitled flow" {
+            return true
+        }
+
+        let parts = lowercased.split(separator: " ")
+        return parts.count == 2 && parts[0] == "flow" && Int(parts[1]) != nil
     }
 
     private func shouldPromoteCredentialStatus(current: CredentialStatus, incoming: CredentialStatus) -> Bool {
