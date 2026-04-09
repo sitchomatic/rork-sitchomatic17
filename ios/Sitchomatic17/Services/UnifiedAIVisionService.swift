@@ -279,7 +279,7 @@ final class UnifiedAIVisionService {
                 outcome: .unknown,
                 confidence: 20,
                 reasoning: "No text detected via OCR — page may be blank or image-heavy",
-                isPageSettled: combinedText.isEmpty,
+                isPageSettled: false,
                 isPageBlank: true,
                 errorText: "",
                 rawResponse: ""
@@ -354,7 +354,7 @@ final class UnifiedAIVisionService {
     }
 
     private func classifyPPSROCR(_ text: String) -> VisionOutcome {
-        if text.contains("certificate") || text.contains("ppsr") && text.contains("success") {
+        if text.contains("certificate") || (text.contains("ppsr") && text.contains("success")) {
             return VisionOutcome(outcome: .ppsrPassed, confidence: 65, reasoning: "OCR fallback: PPSR success indicators detected", isPageSettled: true, isPageBlank: false, errorText: "", rawResponse: "")
         }
         if text.contains("declined") || text.contains("payment failed") || text.contains("insufficient funds") {
