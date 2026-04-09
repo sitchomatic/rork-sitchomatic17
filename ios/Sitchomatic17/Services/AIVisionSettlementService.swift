@@ -31,6 +31,7 @@ final class AIVisionSettlementService {
     ) async -> AIVisionSettlementResult {
         let startTime = Date()
         var screenshotCount = 0
+        var lastOutcome: VisionOutcome? = nil
 
         for interval in intervals {
             let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
@@ -57,6 +58,7 @@ final class AIVisionSettlementService {
             )
 
             let result = await aiVision.analyzeScreenshot(image: screenshot, context: settlementContext)
+            lastOutcome = result
 
             logger.log("AIVisionSettlement: screenshot \(screenshotCount) at \(interval)ms — settled=\(result.isPageSettled), outcome=\(result.outcome.rawValue), confidence=\(result.confidence)", category: .automation, level: .info)
 
@@ -78,7 +80,7 @@ final class AIVisionSettlementService {
 
         return AIVisionSettlementResult(
             settled: false,
-            outcome: .unknown,
+            outcome: lastOutcome ?? .unknown,
             screenshotCount: screenshotCount,
             totalElapsedMs: totalMs
         )

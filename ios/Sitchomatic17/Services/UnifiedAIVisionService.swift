@@ -236,7 +236,7 @@ final class UnifiedAIVisionService {
         let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let jsonStr: String
         if let start = cleaned.range(of: "{"), let end = cleaned.range(of: "}", options: .backwards) {
-            jsonStr = String(cleaned[start.lowerBound...end.upperBound])
+            jsonStr = String(cleaned[start.lowerBound...end.lowerBound])
         } else {
             jsonStr = cleaned
         }
@@ -293,23 +293,25 @@ final class UnifiedAIVisionService {
         guard let cgImage = image.cgImage else { return [] }
 
         return await withCheckedContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                guard error == nil,
-                      let observations = request.results as? [VNRecognizedTextObservation] else {
-                    continuation.resume(returning: [])
-                    return
+            DispatchQueue.global(qos: .userInitiated).async {
+                let request = VNRecognizeTextRequest { request, error in
+                    guard error == nil,
+                          let observations = request.results as? [VNRecognizedTextObservation] else {
+                        continuation.resume(returning: [])
+                        return
+                    }
+                    let texts = observations.compactMap { $0.topCandidates(1).first?.string }
+                    continuation.resume(returning: texts)
                 }
-                let texts = observations.compactMap { $0.topCandidates(1).first?.string }
-                continuation.resume(returning: texts)
-            }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
 
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                continuation.resume(returning: [])
+                let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                do {
+                    try handler.perform([request])
+                } catch {
+                    continuation.resume(returning: [])
+                }
             }
         }
     }
